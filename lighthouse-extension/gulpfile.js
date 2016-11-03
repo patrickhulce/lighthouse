@@ -94,52 +94,73 @@ gulp.task('chromeManifest', () => {
   .pipe(gulp.dest('dist'));
 });
 
-gulp.task('browserify', () => {
+function applyBrowserifyTransforms(bundle) {
+  // Fix an issue with Babelified code that doesn't brfs well.
+  return bundle.transform('./fs-transform', {
+    global: true
+  })
+  // Transform the fs.readFile etc, but do so in all the modules.
+  .transform('brfs', {
+    global: true
+  });
+}
+
+gulp.task('browserify-lighthouse', () => {
   return gulp.src([
-    'app/src/popup.js',
-    'app/src/chromereload.js',
-    'app/src/lighthouse-background.js',
-    'app/src/report-loader.js'
+    'app/src/lighthouse-background.js'
   ], {read: false})
     .pipe(tap(file => {
-      let bundle = browserify(file.path) // , {debug: true})
-      // Fix an issue with Babelified code that doesn't brfs well.
-      .transform('./fs-transform', {
-        global: true
-      })
-      // Transform the fs.readFile etc, but do so in all the modules.
-      .transform('brfs', {
-        global: true
-      });
+      let bundle = browserify(file.path); // , {debug: true})
+      bundle = applyBrowserifyTransforms(bundle);
 
       // In the case of our lighthouse-core script, we've got extra work to do
-      if (file.path.includes('app/src/lighthouse-background.js')) {
-        // Do the additional transform to convert references to devtools-timeline-model
-        // to the modified version internal to Lighthouse.
-        bundle.transform('./dtm-transform.js', {
-          global: true
-        })
-        .ignore('../lighthouse-core/lib/asset-saver.js') // relative from gulpfile location
-        .ignore('source-map');
+      // Do the additional transform to convert references to devtools-timeline-model
+      // to the modified version internal to Lighthouse.
+      bundle.transform('./dtm-transform.js', {
+        global: true
+      })
+      .ignore('../lighthouse-core/lib/asset-saver.js') // relative from gulpfile location
+      .ignore('source-map')
+      .ignore('debug/node');
 
-        // Expose the audits, gatherers, and computed artifacts so they can be dynamically loaded.
-        const corePath = '../lighthouse-core/';
-        const driverPath = `${corePath}gather/`;
-        audits.forEach(audit => {
-          bundle = bundle.require(audit, {expose: audit.replace(corePath, '../')});
-        });
-        gatherers.forEach(gatherer => {
-          bundle = bundle.require(gatherer, {expose: gatherer.replace(driverPath, './')});
-        });
-        computedArtifacts.forEach(artifact => {
-          bundle = bundle.require(artifact, {expose: artifact.replace(driverPath, './')});
-        });
-      }
+      // Expose the audits, gatherers, and computed artifacts so they can be dynamically loaded.
+      const corePath = '../lighthouse-core/';
+      const driverPath = `${corePath}gather/`;
+      audits.forEach(audit => {
+        bundle = bundle.require(audit, {expose: audit.replace(corePath, '../')});
+      });
+      gatherers.forEach(gatherer => {
+        bundle = bundle.require(gatherer, {expose: gatherer.replace(driverPath, './')});
+      });
+      computedArtifacts.forEach(artifact => {
+        bundle = bundle.require(artifact, {expose: artifact.replace(driverPath, './')});
+      });
+
       // Inject the new browserified contents back into our gulp pipeline
       file.contents = bundle.bundle();
     }))
     .pipe(gulp.dest('app/scripts'))
     .pipe(gulp.dest('dist/scripts'));
+});
+
+gulp.task('browserify-other', () => {
+  return gulp.src([
+    'app/src/popup.js',
+    'app/src/chromereload.js',
+    'app/src/report-loader.js',
+  ], {read: false})
+    .pipe(tap(file => {
+      let bundle = browserify(file.path); // , {debug: true})
+      bundle = applyBrowserifyTransforms(bundle);
+      // Inject the new browserified contents back into our gulp pipeline
+      file.contents = bundle.bundle();
+    }))
+    .pipe(gulp.dest('app/scripts'))
+    .pipe(gulp.dest('dist/scripts'));
+});
+
+gulp.task('browserify', cb => {
+  runSequence('browserify-lighthouse', 'browserify-other', cb);
 });
 
 gulp.task('clean', () => {

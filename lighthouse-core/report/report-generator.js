@@ -16,12 +16,13 @@
  */
 'use strict';
 
-/* global Intl */
+/* global Intl, self */
 
 const Formatter = require('../formatters/formatter');
 const Handlebars = require('handlebars');
 const fs = require('fs');
 const path = require('path');
+
 
 const RATINGS = {
   GOOD: {label: 'good', minValue: 0.66, minScore: 75},
@@ -121,11 +122,19 @@ class ReportGenerator {
   }
 
   /**
-   * Gets the HTML for the report.
+   * Gets the HTML for the report loading screen.
    * @return {string}
    */
-  getReportHTML() {
-    return fs.readFileSync(path.join(__dirname, './templates/report.html'), 'utf8');
+  getLoadingPage() {
+    return fs.readFileSync(path.join(__dirname, './templates/loading.html'), 'utf8');
+  }
+
+  /**
+   * Gets the template for the report.
+   * @return {string}
+   */
+  getReportTemplate() {
+    return fs.readFileSync(path.join(__dirname, './templates/report-template.html'), 'utf8');
   }
 
   /**
@@ -137,19 +146,11 @@ class ReportGenerator {
   }
 
   /**
-   * Gets the JavaScript for the report.
-   * @param  {boolean} inline Whether or not to give the JS back as an inline script vs external.
+   * Gets inline script for the report UI
    * @return {string}
    */
-  getReportJS(inline) {
-    // If this is for the extension we won't be able to run JS inline to the page so we will
-    // return a path to a JS file that will be copied in from ./scripts/report.js by gulp.
-    if (inline) {
-      const reportScript =
-          fs.readFileSync(path.join(__dirname, './scripts/lighthouse-report.js'), 'utf8');
-      return `<script>${reportScript}</script>`;
-    }
-    return '<script src="/pages/scripts/lighthouse-report.js"></script>';
+  getReportJS() {
+    return fs.readFileSync(path.join(__dirname, './scripts/lighthouse-report.js'), 'utf8');
   }
 
   /**
@@ -184,9 +185,14 @@ class ReportGenerator {
     return items;
   }
 
-  generateHTML(results, options) {
-    const inline = (options && options.inline) || false;
+  generateHTML(results) {
+    const loading = this.getLoadingPage();
+    const resultsBlock = `<script>self.lhResults = ${JSON.stringify(results, null, 2)};</script>`;
+    const reportHTML = this.generateTemplateHTML(results);
+    return [loading, resultsBlock, reportHTML].join('\n');
+  }
 
+  generateTemplateHTML(results) {
     // Ensure the formatter for each extendedInfo is registered.
     Object.keys(results.audits).forEach(audit => {
       // Use value rather than key for audit.
@@ -216,13 +222,13 @@ class ReportGenerator {
       });
     });
 
-    const template = Handlebars.compile(this.getReportHTML());
+    const template = Handlebars.compile(this.getReportTemplate());
     return template({
       url: results.url,
       lighthouseVersion: results.lighthouseVersion,
       generatedTime: this._formatTime(results.generatedTime),
-      css: this.getReportCSS(inline),
-      script: this.getReportJS(inline),
+      css: this.getReportCSS(),
+      js: this.getReportJS(),
       aggregations: results.aggregations,
       auditsByCategory: this._createPWAAuditsByCategory(results.aggregations)
     });

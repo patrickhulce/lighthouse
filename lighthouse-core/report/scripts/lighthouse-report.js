@@ -67,6 +67,6 @@ LighthouseReport.prototype = {
   }
 };
 
-(function() {
+window.addEventListener('DOMContentLoaded', _ => {
   return new LighthouseReport();
-})();
+});

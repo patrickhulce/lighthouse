@@ -23,22 +23,10 @@ const Config = require('../../../lighthouse-core/config/config');
 const defaultConfig = require('../../../lighthouse-core/config/default.json');
 const log = require('../../../lighthouse-core/lib/log');
 
+const ReportGenerator = require('../../../lighthouse-core/report/report-generator');
+
 const STORAGE_KEY = 'lighthouse_audits';
 const _flatten = arr => [].concat.apply([], arr);
-
-window.createPageAndPopulate = function(results) {
-  const tabURL = chrome.extension.getURL('/pages/report.html');
-  chrome.tabs.create({url: tabURL}, tab => {
-    // Results will be lost when using sendMessage without waiting for the
-    // receiving side to load. Once it loads, we get a message -
-    // ready=true. Respond to this message with the results.
-    chrome.runtime.onMessage.addListener((message, sender, respond) => {
-      if (message && message.ready && sender.tab.id === tab.id) {
-        return respond(results);
-      }
-    });
-  });
-};
 
 /**
  * @param {!Connection} connection
@@ -74,7 +62,10 @@ window.runLighthouseInExtension = function(options, requestedAudits) {
   const connection = new ExtensionProtocol();
   return connection.getCurrentTabURL()
     .then(url => window.runLighthouseForConnection(connection, url, options, requestedAudits))
-    .then(results => window.createPageAndPopulate(results));
+    .then(results => window.createReportPageAsBlob(results))
+    .then(blobURL => {
+      chrome.tabs.create({url: blobURL});
+    });
 };
 
 /**
@@ -89,6 +80,21 @@ window.runLighthouseInWorker = function(port, url, options, requestedAudits) {
   log.setLevel('info');
   const connection = new RawProtocol(port);
   return window.runLighthouseForConnection(connection, url, options, requestedAudits);
+};
+
+window.createReportPageAsBlob = function(results) {
+  performance.mark('report-start');
+  const reportGenerator = new ReportGenerator();
+  const html = reportGenerator.generateHTML(results);
+
+  // document.title = 'new title';
+  // document.documentElement.innerHTML = html
+
+  var blob = new Blob([html], {type: 'text/html'});
+  var bloburl = window.URL.createObjectURL(blob);
+  performance.mark('report-end');
+  performance.measure('generate report', 'report-start', 'report-end');
+  return bloburl;
 };
 
 /**

@@ -21,7 +21,6 @@ limitations under the License.
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width">
   <title>Lighthouse report</title>
-  <link rel="stylesheet" href="/pages/styles/report.css">
   <script>
     class ReportLoader {
       constructor() {
@@ -82,8 +81,6 @@ limitations under the License.
         document.body.appendChild(newScript);
       }
     }
-
-    const reportLoader = new ReportLoader();
   </script>
 </head>
 <body>
@@ -92,3 +89,18 @@ limitations under the License.
   <div class="js-spinner spinner"></div>
 </div>
 
+<script>
+  self.reportLoader = new ReportLoader();
+</script>
+
+<!--
+  To be injected below, roughly:
+  <style>
+    /* report CSS */
+  </style>
+  <script>
+    self.lhresults = { ... }; // JSON results blob
+    class ReportGenerator { ... };
+    reportLoader.writeResults(_ => { ...}); // kick things off
+  </script>
+-->

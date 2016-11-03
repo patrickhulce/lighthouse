@@ -54,6 +54,42 @@ a {
   color: #57A0A8;
 }
 
+.spinner-container {
+  width: 100%;
+  height: 100%;
+  position: fixed;
+  top: 0;
+  left: 0;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  pointer-events: none;
+}
+
+.spinner {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: url(../images/spinner.png) center center no-repeat;
+  background-size: 34px 34px;
+  will-change: transform;
+}
+
+.report-error {
+  font-family: consolas, monospace;
+}
+
+.error-stack {
+  white-space: pre-wrap;
+}
+
+.error-results {
+  background: #dedede;
+  max-height: 600px;
+  overflow: auto;
+  border-radius: 2px;
+}
+
 .report {
   width: 100%;
   margin: 0 auto;
