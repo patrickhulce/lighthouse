@@ -62,8 +62,8 @@ window.runLighthouseInExtension = function(options, requestedAudits) {
   const connection = new ExtensionProtocol();
   return connection.getCurrentTabURL()
     .then(url => window.runLighthouseForConnection(connection, url, options, requestedAudits))
-    .then(results => window.createReportPageAsBlob(results))
-    .then(blobURL => {
+    .then(results => {
+      const blobURL = window.createReportPageAsBlob(results);
       chrome.tabs.create({url: blobURL});
     });
 };
@@ -82,16 +82,23 @@ window.runLighthouseInWorker = function(port, url, options, requestedAudits) {
   return window.runLighthouseForConnection(connection, url, options, requestedAudits);
 };
 
+/**
+ * @param {Object} results Lighthouse results object
+ * @return {!string} Blob URL of the report (or error page) HTML
+ */
 window.createReportPageAsBlob = function(results) {
   performance.mark('report-start');
+
   const reportGenerator = new ReportGenerator();
-  const html = reportGenerator.generateHTML(results);
+  let html;
+  try {
+    html = reportGenerator.generateHTML(results);
+  } catch (err) {
+    html = reportGenerator.renderException(err, results);
+  }
+  const blob = new Blob([html], {type: 'text/html'});
+  const bloburl = window.URL.createObjectURL(blob);
 
-  // document.title = 'new title';
-  // document.documentElement.innerHTML = html
-
-  var blob = new Blob([html], {type: 'text/html'});
-  var bloburl = window.URL.createObjectURL(blob);
   performance.mark('report-end');
   performance.measure('generate report', 'report-start', 'report-end');
   return bloburl;

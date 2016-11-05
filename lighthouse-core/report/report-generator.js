@@ -16,13 +16,12 @@
  */
 'use strict';
 
-/* global Intl, self */
+/* global Intl */
 
 const Formatter = require('../formatters/formatter');
 const Handlebars = require('handlebars');
 const fs = require('fs');
 const path = require('path');
-
 
 const RATINGS = {
   GOOD: {label: 'good', minValue: 0.66, minScore: 75},
@@ -68,7 +67,6 @@ class ReportGenerator {
       if (typeof value === 'boolean') {
         return value ? '&#10004;' : '&#10008;';
       }
-
       return value;
     });
 
@@ -122,19 +120,19 @@ class ReportGenerator {
   }
 
   /**
-   * Gets the HTML for the report loading screen.
-   * @return {string}
-   */
-  getLoadingPage() {
-    return fs.readFileSync(path.join(__dirname, './templates/loading.html'), 'utf8');
-  }
-
-  /**
    * Gets the template for the report.
    * @return {string}
    */
   getReportTemplate() {
     return fs.readFileSync(path.join(__dirname, './templates/report-template.html'), 'utf8');
+  }
+
+  /**
+   * Gets the template for any exceptions.
+   * @return {string}
+   */
+  getExceptionTemplate() {
+    return fs.readFileSync(path.join(__dirname, './templates/exception.html'), 'utf8');
   }
 
   /**
@@ -146,7 +144,7 @@ class ReportGenerator {
   }
 
   /**
-   * Gets inline script for the report UI
+   * Gets the script for the report UI
    * @return {string}
    */
   getReportJS() {
@@ -185,14 +183,23 @@ class ReportGenerator {
     return items;
   }
 
-  generateHTML(results) {
-    const loading = this.getLoadingPage();
-    const resultsBlock = `<script>self.lhResults = ${JSON.stringify(results, null, 2)};</script>`;
-    const reportHTML = this.generateTemplateHTML(results);
-    return [loading, resultsBlock, reportHTML].join('\n');
+  /**
+   * Creates the page describing any error generated while running generateHTML()
+   */
+  renderException(err, results) {
+    const template = Handlebars.compile(this.getExceptionTemplate());
+    return template({
+      errMessage: err.message,
+      errStack: err.stack,
+      css: this.getReportCSS(),
+      results: JSON.stringify(results, null, 2)
+    });
   }
 
-  generateTemplateHTML(results) {
+  /**
+   * Generates the Lighthouse report HTML
+   */
+  generateHTML(results) {
     // Ensure the formatter for each extendedInfo is registered.
     Object.keys(results.audits).forEach(audit => {
       // Use value rather than key for audit.
@@ -227,8 +234,9 @@ class ReportGenerator {
       url: results.url,
       lighthouseVersion: results.lighthouseVersion,
       generatedTime: this._formatTime(results.generatedTime),
+      lhresults: JSON.stringify(results, null, 2),
       css: this.getReportCSS(),
-      js: this.getReportJS(),
+      script: this.getReportJS(),
       aggregations: results.aggregations,
       auditsByCategory: this._createPWAAuditsByCategory(results.aggregations)
     });

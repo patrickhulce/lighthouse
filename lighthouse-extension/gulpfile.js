@@ -14,7 +14,6 @@ const eslint = require('gulp-eslint');
 const livereload = require('gulp-livereload');
 const tap = require('gulp-tap');
 const zip = require('gulp-zip');
-const rename = require('gulp-rename');
 
 const audits = fs.readdirSync(path.join(__dirname, '../', 'lighthouse-core/audits/'))
     .filter(f => /\.js$/.test(f))
@@ -43,15 +42,6 @@ gulp.task('extras', () => {
     dot: true
   })
   .pipe(debug({title: 'copying to dist:'}))
-  .pipe(gulp.dest('dist'));
-});
-
-gulp.task('copyReportScripts', () => {
-  return gulp.src([
-    '../lighthouse-core/report/scripts/lighthouse-report.js'
-  ])
-  .pipe(rename('pages/scripts/lighthouse-report.js'))
-  .pipe(gulp.dest('app'))
   .pipe(gulp.dest('dist'));
 });
 
@@ -169,7 +159,7 @@ gulp.task('clean', () => {
   );
 });
 
-gulp.task('watch', ['lint', 'browserify', 'html', 'copyReportScripts'], () => {
+gulp.task('watch', ['lint', 'browserify', 'html'], () => {
   livereload.listen();
 
   gulp.watch([
