@@ -137,7 +137,6 @@ gulp.task('browserify-other', () => {
   return gulp.src([
     'app/src/popup.js',
     'app/src/chromereload.js',
-    'app/src/report-loader.js',
   ], {read: false})
     .pipe(tap(file => {
       let bundle = browserify(file.path); // , {debug: true})
