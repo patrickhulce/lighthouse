@@ -185,6 +185,9 @@ class ReportGenerator {
 
   /**
    * Creates the page describing any error generated while running generateHTML()
+   * @param {Exception} err Exception thrown from generateHTML
+   * @param {Object} results Lighthouse results
+   * @returns {string} HTML of the exception page
    */
   renderException(err, results) {
     const template = Handlebars.compile(this.getExceptionTemplate());
@@ -198,6 +201,8 @@ class ReportGenerator {
 
   /**
    * Generates the Lighthouse report HTML
+   * @param {Object} results Lighthouse results
+   * @returns {string} HTML of the report page
    */
   generateHTML(results) {
     // Ensure the formatter for each extendedInfo is registered.

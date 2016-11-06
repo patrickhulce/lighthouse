@@ -68,5 +68,7 @@ LighthouseReport.prototype = {
 };
 
 window.addEventListener('DOMContentLoaded', _ => {
-  return new LighthouseReport();
+  // TODO: remove these two comments when we upgrade to latest eslint
+  // eslint-disable-next-line no-new
+  new LighthouseReport();
 });

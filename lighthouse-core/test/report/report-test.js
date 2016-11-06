@@ -48,5 +48,6 @@ describe('Report', () => {
     assert.ok(html.includes('<footer'), 'no footer tag found');
     assert.ok(html.includes('function LighthouseReport'), 'lighthouse-report.js was not inlined');
     assert.ok(html.includes('.report-body {'), 'report.css was not inlined');
+    assert.ok(!html.includes('&quot;lighthouseVersion'), 'lhresults were not escaped');
   });
 });

@@ -97,11 +97,11 @@ window.createReportPageAsBlob = function(results) {
     html = reportGenerator.renderException(err, results);
   }
   const blob = new Blob([html], {type: 'text/html'});
-  const bloburl = window.URL.createObjectURL(blob);
+  const blobURL = window.URL.createObjectURL(blob);
 
   performance.mark('report-end');
   performance.measure('generate report', 'report-start', 'report-end');
-  return bloburl;
+  return blobURL;
 };
 
 /**

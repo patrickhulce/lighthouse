@@ -103,8 +103,9 @@ gulp.task('browserify-lighthouse', () => {
       let bundle = browserify(file.path); // , {debug: true})
       bundle = applyBrowserifyTransforms(bundle);
 
-      // In the case of our lighthouse-core script, we've got extra work to do
-      // Do the additional transform to convert references to devtools-timeline-model
+      // lighthouse-background will need some additional transforms, ignores and requires…
+
+      // Do the additional transform to convert references of devtools-timeline-model
       // to the modified version internal to Lighthouse.
       bundle.transform('./dtm-transform.js', {
         global: true
@@ -187,7 +188,7 @@ gulp.task('package', function() {
 gulp.task('build', cb => {
   runSequence(
     'lint', 'browserify', 'chromeManifest',
-    ['html', 'images', 'css', 'extras', 'copyReportScripts'], cb);
+    ['html', 'images', 'css', 'extras'], cb);
 });
 
 gulp.task('default', ['clean'], cb => {
