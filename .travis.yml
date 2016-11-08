@@ -22,13 +22,15 @@ before_script:
   - cd lighthouse-cli && tsc && cd ..
 script:
   - if [[ $(node -v) =~ ^v4.* ]]; then export __node_harmony=--harmony; fi
-  - npm run lint
-  - npm run unit
-  - npm run closure
+  # - npm run lint
+  # - npm run unit
+  # - npm run closure
+  - npm run smoke
+  - npm run smokehouse
   - npm run smoke
   - npm run smokehouse
   - cd lighthouse-extension
-  - gulp build
+  # - gulp build
   - cd ..
 after_success:
-  - npm run coveralls
+  # - npm run coveralls
