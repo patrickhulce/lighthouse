@@ -107,7 +107,7 @@ function runLighthouse(url, configPath) {
 
   if (runResults.status === PROTOCOL_TIMEOUT_EXIT_CODE) {
     console.error(`Lighthouse debugger connection timed out ${RETRIES} times. Giving up.`);
-    process.exit(1);
+    throw new Error('something');
   } else if (runResults.status !== 0) {
     console.error(`Lighthouse run failed with exit code ${runResults.status}. stderr to follow:`);
     console.error(runResults.stderr);
@@ -214,19 +214,37 @@ const expectations = require(resolveLocalOrCwd(cli['expectations-path']));
 // reporting result.
 let passingCount = 0;
 let failingCount = 0;
+let skipRemaining = false;
 expectations.forEach(expected => {
+  if (skipRemaining) {
+    return;
+  }
+
   console.log(`Checking '${expected.initialUrl}'...`);
-  const results = runLighthouse(expected.initialUrl, configPath);
+  let results;
+  try {
+    results = runLighthouse(expected.initialUrl, configPath);
+  } catch (e) {
+    skipRemaining = true;
+    console.log('exiting in 5 seconds...');
+    setTimeout(_ => {
+      process.exit(1);
+    }, 5000);
+    return;
+  }
+
   const collated = collateResults(results, expected);
   const counts = report(collated);
   passingCount += counts.passed;
   failingCount += counts.failed;
 });
 
-if (passingCount) {
-  console.log(greenify(`${passingCount} passing`));
-}
-if (failingCount) {
-  console.log(redify(`${failingCount} failing`));
-  process.exit(1);
+if (!skipRemaining) {
+  if (passingCount) {
+    console.log(greenify(`${passingCount} passing`));
+  }
+  if (failingCount) {
+    console.log(redify(`${failingCount} failing`));
+    process.exit(1);
+  }
 }
