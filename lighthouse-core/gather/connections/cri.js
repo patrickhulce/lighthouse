@@ -19,8 +19,11 @@
 const Connection = require('./connection.js');
 const WebSocket = require('ws');
 const http = require('http');
+const log = require('../../lib/log.js');
+
 const hostname = 'localhost';
 const port = process.env.PORT || 9222;
+const CONNECT_TIMEOUT = 10000;
 
 class CriConnection extends Connection {
   /**
@@ -49,7 +52,7 @@ class CriConnection extends Connection {
    */
   _runJsonCommand(command) {
     return new Promise((resolve, reject) => {
-      http.get({
+      const request = http.get({
         hostname: hostname,
         port: port,
         path: '/json/' + command
@@ -65,6 +68,15 @@ class CriConnection extends Connection {
           }
           reject(new Error(`Unable to fetch webSocketDebuggerUrl, status: ${response.statusCode}`));
         });
+      });
+
+      request.setTimeout(CONNECT_TIMEOUT, _ => {
+        log.error('CriConnection', 'Timeout waiting for initial Debugger Protocol connection.');
+        request.abort();
+
+        const err = new Error('Timeout waiting for initial Debugger Protocol connection.');
+        err.code = 'CRI_TIMEOUT';
+        reject(err);
       });
     });
   }
