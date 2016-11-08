@@ -25,7 +25,7 @@ const DEFAULT_CONFIG_PATH = 'pwa-config';
 const DEFAULT_EXPECTATIONS_PATH = 'pwa-expectations';
 
 const PROTOCOL_TIMEOUT_EXIT_CODE = 67;
-const RETRIES = 3;
+const RETRIES = 5;
 
 const GREEN = '\x1B[32m';
 const RED = '\x1B[31m';
