@@ -22,10 +22,17 @@ const http = require('http');
 const log = require('../../lib/log.js');
 
 const hostname = 'localhost';
-const port = process.env.PORT || 9222;
+// const port = process.env.PORT || 9222;
 const CONNECT_TIMEOUT = 10000;
 
 class CriConnection extends Connection {
+  constructor(port) {
+    super();
+
+    log.log('CriConnection', 'Going to connect on port ' + port);
+    this.port = port;
+  }
+
   /**
    * @override
    * @return {!Promise}
@@ -54,7 +61,7 @@ class CriConnection extends Connection {
     return new Promise((resolve, reject) => {
       const request = http.get({
         hostname: hostname,
-        port: port,
+        port: this.port,
         path: '/json/' + command
       }, response => {
         var data = '';

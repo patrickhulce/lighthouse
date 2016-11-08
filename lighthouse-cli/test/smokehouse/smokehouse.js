@@ -69,6 +69,10 @@ function resolveLocalOrCwd(payloadPath) {
   return resolved;
 }
 
+function random(min, max) {
+  return Math.floor(Math.random() * (max - min)) + min;
+}
+
 /**
  * Launch Chrome and do a full Lighthouse run.
  * @param {string} url
@@ -76,21 +80,6 @@ function resolveLocalOrCwd(payloadPath) {
  * @return {!LighthouseResults}
  */
 function runLighthouse(url, configPath) {
-  const command = 'node';
-  const args = [
-    'lighthouse-cli/index.js',
-    url,
-    `--config-path=${configPath}`,
-    '--output=json',
-    '--quiet'
-  ];
-
-  // Assume if currently running in Node v4 that child process will as well, so
-  // run Lighthouse with --harmony flag.
-  if (/v4/.test(process.version)) {
-    args.unshift('--harmony');
-  }
-
   // Lighthouse sometimes times out waiting to for a connection to Chrome in CI.
   // Watch for this error and retry relaunching Chrome and running Lighthouse up
   // to RETRIES times. See https://github.com/GoogleChrome/lighthouse/issues/833
@@ -99,6 +88,25 @@ function runLighthouse(url, configPath) {
   do {
     if (runCount > 0) {
       console.log('  Timed out waiting for debugger connection. Retrying...');
+    }
+
+    const port = random(9000, 10000);
+    console.log('smokehouse going to use port ' + port);
+
+    const command = 'node';
+    const args = [
+      'lighthouse-cli/index.js',
+      url,
+      `--config-path=${configPath}`,
+      '--output=json',
+      '--quiet',
+      `--port=${port}`
+    ];
+
+    // Assume if currently running in Node v4 that child process will as well, so
+    // run Lighthouse with --harmony flag.
+    if (/v4/.test(process.version)) {
+      args.unshift('--harmony');
     }
 
     runCount++;
