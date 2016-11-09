@@ -128,6 +128,13 @@ limitations under the License.
                     </div>
                   {{/if}}
 
+                  {{#if subItem.debugString }}
+                    <div class="report-section__item-debug">
+                      <b>Audit debug info:</b>
+                      {{ subItem.debugString }}
+                    </div>
+                  {{/if}}
+
                   {{#if subItem.extendedInfo.value}}
                     <div class="report-section__item-extended-info">{{> (lookup . 'name') subItem.extendedInfo.value }}</div>
                   {{/if}}
