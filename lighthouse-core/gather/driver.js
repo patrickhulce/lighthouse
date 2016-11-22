@@ -27,6 +27,13 @@ const log = require('../lib/log.js');
 const MAX_WAIT_FOR_FULLY_LOADED = 25 * 1000;
 const PAUSE_AFTER_LOAD = 500;
 
+const EMULATION_DEVICES = {
+  nexus5x: emulation.emulateNexus5X,
+  iphone4: emulation.emulateiPhone4,
+  ipad4: emulation.emulateiPad4,
+  none: emulation.clearDeviceEmulation,
+};
+
 class Driver {
 
   /**
@@ -568,11 +575,11 @@ class Driver {
     return this.sendCommand('Runtime.enable');
   }
 
-  beginEmulation(flags) {
+  enableEmulation(flags) {
     const emulations = [];
 
     if (!flags.disableDeviceEmulation) {
-      emulations.push(emulation.enableNexus5X(this));
+      emulations.push(emulation.enableDeviceEmulation(this));
     }
 
     if (!flags.disableNetworkThrottling) {
@@ -584,6 +591,19 @@ class Driver {
     }
 
     return Promise.all(emulations);
+  }
+
+  beginEmulation(flags, pass) {
+    if (flags.disableDeviceEmulation) {
+      return;
+    }
+
+    const emulate = EMULATION_DEVICES[pass.emulation || 'nexus5x'];
+    if (typeof emulate !== 'function') {
+      throw new Error(`invalid emulation target: ${pass.emulation}`);
+    }
+
+    return emulate(this);
   }
 
   /**

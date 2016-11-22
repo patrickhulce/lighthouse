@@ -16,30 +16,65 @@
  */
 'use strict';
 
-/**
- * Nexus 5X metrics adapted from emulated_devices/module.json
- */
-const NEXUS5X_EMULATION_METRICS = {
-  mobile: true,
-  screenWidth: 412,
-  screenHeight: 732,
-  width: 412,
-  height: 732,
+const DEFAULT_EMULATION_METRICS = {
   positionX: 0,
   positionY: 0,
   scale: 1,
-  deviceScaleFactor: 2.625,
   fitWindow: false,
+};
+
+const MOBILE_EMULATION_METRICS = Object.assign({
+  mobile: true,
   screenOrientation: {
     angle: 0,
     type: 'portraitPrimary'
   }
-};
+}, DEFAULT_EMULATION_METRICS);
+
+/**
+ * Nexus 5X metrics adapted from emulated_devices/module.json
+ */
+const NEXUS5X_EMULATION_METRICS = Object.assign({
+  screenWidth: 412,
+  screenHeight: 732,
+  width: 412,
+  height: 732,
+  deviceScaleFactor: 2.625,
+}, MOBILE_EMULATION_METRICS);
+
+const IPHONE4_EMULATION_METRICS = Object.assign({
+  screenWidth: 320,
+  screenHeight: 480,
+  width: 320,
+  height: 480,
+  deviceScaleFactor: 1,
+}, MOBILE_EMULATION_METRICS);
+
+const IPAD4_EMULATION_METRICS = Object.assign({
+  screenWidth: 768,
+  screenHeight: 1024,
+  width: 1024,
+  height: 1366,
+  deviceScaleFactor: 2,
+}, MOBILE_EMULATION_METRICS)
 
 const NEXUS5X_USERAGENT = {
   userAgent: 'Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5 Build/MRA58N) AppleWebKit/537.36' +
     '(KHTML, like Gecko) Chrome/52.0.2743.8 Mobile Safari/537.36'
 };
+
+const IPHONE4_USERAGENT = {
+  userAgent: 'Iphone 4'
+};
+
+const IPAD4_USERAGENT = {
+  userAgent: 'iPad 4'
+};
+
+const DESKTOP_USERAGENT = {
+  userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_6) AppleWebKit/537.36' +
+    '(KHTML, like Gecko) Chrome/54.0.2840.98 Safari/537.36'
+}
 
 const TYPICAL_MOBILE_THROTTLING_METRICS = {
   latency: 150, // 150ms
@@ -70,7 +105,7 @@ const CPU_THROTTLE_METRICS = {
   rate: 5
 };
 
-function enableNexus5X(driver) {
+function enableDeviceEmulation(driver) {
   /**
    * Finalizes touch emulation by enabling `"ontouchstart" in window` feature detect
    * to work. Messy hack, though copied verbatim from DevTools' emulation/TouchModel.js
@@ -94,18 +129,46 @@ function enableNexus5X(driver) {
   /* eslint-enable */
 
   return Promise.all([
-    driver.sendCommand('Emulation.setDeviceMetricsOverride', NEXUS5X_EMULATION_METRICS),
-    // Network.enable must be called for UA overriding to work
+    // Network.enable must be called for UA overriding to work later
     driver.sendCommand('Network.enable'),
-    driver.sendCommand('Network.setUserAgentOverride', NEXUS5X_USERAGENT),
-    driver.sendCommand('Emulation.setTouchEmulationEnabled', {
-      enabled: true,
-      configuration: 'mobile'
-    }),
     driver.sendCommand('Page.addScriptToEvaluateOnLoad', {
       scriptSource: '(' + injectedTouchEventsFunction.toString() + ')()'
     })
   ]);
+}
+
+function setDeviceMetrics(driver, metrics, useragent) {
+  return Promise.all([
+    driver.sendCommand('Network.setUserAgentOverride', useragent),
+    driver.sendCommand('Emulation.setDeviceMetricsOverride', metrics),
+    driver.sendCommand('Emulation.setTouchEmulationEnabled', {
+      enabled: true,
+      configuration: 'mobile'
+    }),
+  ]);
+}
+
+function clearDeviceEmulation(driver) {
+  return Promise.all([
+    driver.sendCommand('Network.setUserAgentOverride', DESKTOP_USERAGENT),
+    driver.sendCommand('Emulation.clearDeviceMetricsOverride'),
+    driver.sendCommand('Emulation.setTouchEmulationEnabled', {
+      enabled: false,
+      configuration: 'desktop'
+    }),
+  ]);
+}
+
+function emulateNexus5X(driver) {
+  return setDeviceMetrics(driver, NEXUS5X_EMULATION_METRICS, NEXUS5X_USERAGENT);
+}
+
+function emulateiPhone4(driver) {
+  return setDeviceMetrics(driver, IPHONE4_EMULATION_METRICS, IPHONE4_USERAGENT);
+}
+
+function emulateiPad4(driver) {
+  return setDeviceMetrics(driver, IPAD4_EMULATION_METRICS, IPAD4_USERAGENT);
 }
 
 function enableNetworkThrottling(driver) {
@@ -129,7 +192,11 @@ function disableCPUThrottling(driver) {
 }
 
 module.exports = {
-  enableNexus5X,
+  enableDeviceEmulation,
+  clearDeviceEmulation,
+  emulateNexus5X,
+  emulateiPhone4,
+  emulateiPad4,
   enableNetworkThrottling,
   disableNetworkThrottling,
   enableCPUThrottling,

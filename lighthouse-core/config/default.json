@@ -2,6 +2,7 @@
   "passes": [{
     "recordNetwork": true,
     "recordTrace": true,
+    "emulation": "iphone4",
     "gatherers": [
       "url",
       "https",
@@ -28,6 +29,7 @@
   }, {
     "recordNetwork": true,
     "passName": "dbw",
+    "emulation": "none",
     "gatherers": [
       "styles",
       "dobetterweb/all-event-listeners",
@@ -86,7 +88,8 @@
     "dobetterweb/no-websql",
     "dobetterweb/script-blocking-first-paint",
     "dobetterweb/uses-http2",
-    "dobetterweb/uses-passive-event-listeners"
+    "dobetterweb/uses-passive-event-listeners",
+    "dobetterweb/uses-responsive-images"
   ],
 
   "aggregations": [{
@@ -284,6 +287,9 @@
       "name": "Using modern CSS features",
       "audits": {
         "no-old-flexbox": {
+          "expectedValue": false
+        },
+        "uses-responsive-images": {
           "expectedValue": false
         }
       }
