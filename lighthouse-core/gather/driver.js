@@ -143,17 +143,33 @@ class Driver {
         (_ => reject(new Error('The asynchronous expression exceeded the allotted time of 60s'))),
         60000
       );
+
       this.sendCommand('Runtime.evaluate', {
-        expression: asyncExpression,
+        expression: `(function wrapInNativePromise() {
+          const __nativePromise = window.__nativePromise || Promise;
+          return new __nativePromise(function(resolve) {
+            const wrapError = ${wrapRuntimeEvalErrorInBrowser.toString()};
+            try {
+              __nativePromise.resolve(${asyncExpression}).then(resolve, wrapError);
+            } catch (e) {
+              wrapError(e);
+            }
+          });
+        }())`,
         includeCommandLineAPI: true,
         awaitPromise: true,
         returnByValue: true
       }).then(result => {
         clearTimeout(asyncTimeout);
+        const value = result.result.value;
+
         if (result.exceptionDetails) {
-          reject(result.exceptionDetails.exception.value);
+          // An error occurred before we could even enter our try block, should be *very* rare
+          reject(new Error('an unknown driver error occurred'));
+        } if (value.__failedInBrowser) {
+          reject(Object.assign(new Error(), value));
         } else {
-          resolve(result.result.value);
+          resolve(value);
         }
       }).catch(err => {
         clearTimeout(asyncTimeout);
@@ -711,6 +727,26 @@ function captureJSCallUsage(funcRef, set) {
 
     return originalFunc.apply(this, arguments);
   };
+}
+
+/**
+ * The `exceptionDetails` provided by the debugger protocol does not contain the useful
+ * information such as name, message, and stack trace of the error when it's wrapped in a
+ * promise. Instead, map to a successful object that contains this information.
+ * @param {string|Error} err The error to convert
+ * istanbul ignore next
+ */
+function wrapRuntimeEvalErrorInBrowser(err) {
+  /* global resolve */
+  err = err || new Error();
+  const fallbackMessage = typeof err === 'string' ? err : 'unknown error';
+
+  resolve({
+    __failedInBrowser: true,
+    name: err.name || 'Error',
+    message: err.message || fallbackMessage,
+    stack: err.stack || (new Error()).stack,
+  });
 }
 
 module.exports = Driver;
