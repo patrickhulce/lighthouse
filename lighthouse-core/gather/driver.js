@@ -166,7 +166,7 @@ class Driver {
         if (result.exceptionDetails) {
           // An error occurred before we could even enter our try block, should be *very* rare
           reject(new Error('an unknown driver error occurred'));
-        } if (value.__failedInBrowser) {
+        } if (value && value.__failedInBrowser) {
           reject(Object.assign(new Error(), value));
         } else {
           resolve(value);

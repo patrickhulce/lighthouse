@@ -121,7 +121,7 @@ class TagsBlockingFirstPaint extends Gatherer {
       .catch(err => {
         this.artifact = {
           value: -1,
-          debugString: err.toString()
+          debugString: err.message
         };
       });
   }
