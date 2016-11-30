@@ -145,16 +145,15 @@ class Driver {
       );
 
       this.sendCommand('Runtime.evaluate', {
+        // We need to wrap the raw expression for several purposes
+        // 1. Ensure that the expression will be a native Promise and not a polyfill/non-Promise.
+        // 2. Ensure that errors captured in the Promise are converted into plain-old JS Objects
+        //    so that they can be serialized properly b/c JSON.stringify(new Error('foo')) === '{}'
         expression: `(function wrapInNativePromise() {
           const __nativePromise = window.__nativePromise || Promise;
-          return new __nativePromise(function(resolve) {
-            const wrapError = ${wrapRuntimeEvalErrorInBrowser.toString()};
-            try {
-              __nativePromise.resolve(${asyncExpression}).then(resolve, wrapError);
-            } catch (e) {
-              wrapError(e);
-            }
-          });
+          return __nativePromise.resolve()
+            .then(_ => ${asyncExpression})
+            .catch(${wrapRuntimeEvalErrorInBrowser.toString()});
         }())`,
         includeCommandLineAPI: true,
         awaitPromise: true,
@@ -737,16 +736,15 @@ function captureJSCallUsage(funcRef, set) {
  * istanbul ignore next
  */
 function wrapRuntimeEvalErrorInBrowser(err) {
-  /* global resolve */
   err = err || new Error();
   const fallbackMessage = typeof err === 'string' ? err : 'unknown error';
 
-  resolve({
+  return {
     __failedInBrowser: true,
     name: err.name || 'Error',
     message: err.message || fallbackMessage,
     stack: err.stack || (new Error()).stack,
-  });
+  };
 }
 
 module.exports = Driver;

@@ -24,7 +24,9 @@ const parseURL = require('url').parse;
 function requestHandler(request, response) {
   const filePath = parseURL(request.url).pathname;
   const queryString = parseURL(request.url).search;
-  const absoluteFilePath = path.join(__dirname, filePath);
+  const absoluteFilePath = filePath === '/dobetterweb/promise_polyfill.js' ?
+    path.join(__dirname, '../../../lighthouse-core/third_party/promise-polyfill/promise.js') :
+    path.join(__dirname, filePath);
 
   fs.exists(absoluteFilePath, fsExistsCallback);
 
