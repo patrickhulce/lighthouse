@@ -163,8 +163,8 @@ class Driver {
         const value = result.result.value;
 
         if (result.exceptionDetails) {
-          // An error occurred before we could even enter our try block, should be *very* rare
-          reject(new Error('an unknown driver error occurred'));
+          // An error occurred before we could even create a Promise, should be *very* rare
+          reject(new Error('an unexpected driver error occurred'));
         } if (value && value.__failedInBrowser) {
           reject(Object.assign(new Error(), value));
         } else {
