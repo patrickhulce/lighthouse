@@ -23,25 +23,6 @@ const badNavStartTrace = require('../fixtures/traces/bad-nav-start-ts.json');
 
 /* eslint-env mocha */
 describe('Performance: first-meaningful-paint audit', () => {
-  it('scores a -1 when no trace data is present', () => {
-    return FMPAudit.audit({}).then(result => {
-      assert.equal(result.score, -1);
-      assert.ok(result.debugString);
-    });
-  });
-
-  it('scores a -1 when faulty trace data is present', () => {
-    const artifacts = {
-      traces: {
-        [Audit.DEFAULT_PASS]: {boo: 'ya'}
-      }
-    };
-    return FMPAudit.audit(artifacts).then(result => {
-      assert.equal(result.rawValue, -1);
-      assert.ok(result.debugString);
-    });
-  });
-
   it('scores a -1 and returns an error when navigation start is before trace start', () => {
     const artifacts = {
       traces: {
@@ -76,12 +57,8 @@ describe('Performance: first-meaningful-paint audit', () => {
       assert.equal(fmpResult.rawValue, 1099.5);
     });
 
-    it('finds the correct fCP + fMP timings', () => {
-      assert.equal(fmpResult.extendedInfo.value.timings.fCP, 461.901);
-      assert.equal(fmpResult.extendedInfo.value.timings.fMPbasic, 461.342);
-      assert.equal(fmpResult.extendedInfo.value.timings.fMPpageheight, 461.342);
-      assert.equal(fmpResult.extendedInfo.value.timings.fMPwebfont, 1099.523);
-      assert.equal(fmpResult.extendedInfo.value.timings.fMPfull, 1099.523);
+    it('finds the correct fMP timings', () => {
+      assert.equal(fmpResult.extendedInfo.value.timings.fMP, 1099.523);
     });
 
     it('scores the fMP correctly', () => {

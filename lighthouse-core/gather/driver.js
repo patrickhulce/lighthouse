@@ -49,7 +49,6 @@ class Driver {
       'benchmark',
       'netlog',
       'devtools.timeline',
-      'disabled-by-default-blink.debug.layout',
       'disabled-by-default-devtools.timeline',
       'disabled-by-default-devtools.timeline.frame',
       'disabled-by-default-devtools.timeline.stack',
@@ -440,6 +439,21 @@ class Driver {
         }
       });
     });
+  }
+
+  /**
+   * @param {string} name The name of API whose permission you wish to query
+   * @return {!Promise<string>} The state of permissions, resolved in a promise.
+   *    See https://developer.mozilla.org/en-US/docs/Web/API/Permissions/query.
+   */
+  queryPermissionState(name) {
+    const expressionToEval = `
+      navigator.permissions.query({name: '${name}'}).then(result => {
+        return result.state;
+      })
+    `;
+
+    return this.evaluateAsync(expressionToEval);
   }
 
   /**

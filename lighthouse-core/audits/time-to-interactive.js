@@ -31,7 +31,7 @@ class TTIMetric extends Audit {
       description: 'Time To Interactive (alpha)',
       helpText: 'Time to Interactive identifies the time at which your app appears to be ready enough to interact with. <a href="https://developers.google.com/web/tools/lighthouse/audits/time-to-interactive" target="_blank" rel="noopener noreferrer">Learn more</a>.',
       optimalValue: SCORING_TARGET.toLocaleString() + 'ms',
-      requiredArtifacts: ['traceContents']
+      requiredArtifacts: ['traces']
     };
   }
 
@@ -82,7 +82,7 @@ class TTIMetric extends Audit {
       const endOfTraceTime = model.bounds.max;
 
       // TODO: Wait for DOMContentLoadedEndEvent
-      const fMPts = timings.fMPfull + timings.navStart;
+      const fMPts = timings.fMP + timings.navStart;
 
       // look at speedline results for 85% starting at FMP
       let visuallyReadyTiming = 0;

@@ -37,6 +37,7 @@
       "dobetterweb/datenow",
       "dobetterweb/document-write",
       "dobetterweb/geolocation-on-start",
+      "dobetterweb/notification-on-start",
       "dobetterweb/tags-blocking-first-paint",
       "dobetterweb/websql"
     ]
@@ -84,6 +85,7 @@
     "dobetterweb/no-mutation-events",
     "dobetterweb/no-old-flexbox",
     "dobetterweb/no-websql",
+    "dobetterweb/notification-on-start",
     "dobetterweb/script-blocking-first-paint",
     "dobetterweb/uses-http2",
     "dobetterweb/uses-passive-event-listeners"
@@ -290,12 +292,6 @@
     }, {
       "name": "Using modern JavaScript features",
       "audits": {
-        "no-datenow": {
-          "expectedValue": false
-        },
-        "no-console-time": {
-          "expectedValue": false
-        },
         "uses-passive-event-listeners": {
           "expectedValue": true
         },
@@ -319,6 +315,9 @@
           "expectedValue": true
         },
         "geolocation-on-start": {
+          "expectedValue": false
+        },
+        "notification-on-start": {
           "expectedValue": false
         }
       }
@@ -412,6 +411,22 @@
         "user-timings": {
           "expectedValue": 0,
           "weight": 1
+        }
+      }
+    }]
+  }, {
+    "name": "Fancier stuff",
+    "description": "A list of newer features that you could be using in your app. These audits do not affect your score and are just suggestions.",
+    "scored": false,
+    "categorizable": true,
+    "items": [{
+      "name": "New JavaScript features",
+      "audits": {
+        "no-datenow": {
+          "expectedValue": false
+        },
+        "no-console-time": {
+          "expectedValue": false
         }
       }
     }]
