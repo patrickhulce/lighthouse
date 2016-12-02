@@ -23,6 +23,15 @@ const URL = 'https://example.com';
 /* eslint-env mocha */
 
 describe('Page does not use Date.now()', () => {
+  it('fails when gatherer returns error', () => {
+    const debugString = 'interesting debug string';
+    const auditResult = DateNowUseAudit.audit({
+      DateNowUse: {value: -1, debugString}
+    });
+    assert.equal(auditResult.rawValue, -1);
+    assert.equal(auditResult.debugString, debugString);
+  });
+
   it('fails when no input present', () => {
     const auditResult = DateNowUseAudit.audit({});
     assert.equal(auditResult.rawValue, -1);
@@ -71,7 +80,6 @@ describe('Page does not use Date.now()', () => {
     const auditResult = DateNowUseAudit.audit({
       DateNowUse: {
         usage: [
-          {line: 1, col: 1},
           {url: 'http://example.com/two', line: 10, col: 1},
           {url: 'http://example2.com/two', line: 2, col: 22}
         ]
@@ -81,5 +89,20 @@ describe('Page does not use Date.now()', () => {
 
     assert.equal(auditResult.rawValue, false);
     assert.equal(auditResult.extendedInfo.value.length, 1);
+  });
+
+  it('fails when console.time() is used in eval()', () => {
+    const auditResult = DateNowUseAudit.audit({
+      DateNowUse: {
+        usage: [
+          {url: 'http://example.com/one', line: 1, col: 1, isEval: false},
+          {url: 'module.exports (blah/handler.js:5:18)', line: 5, col: 18, isEval: true},
+          {url: 'module.exports (blah/handler.js:5:18)', line: 5, col: 18, isEval: false}
+        ]
+      },
+      URL: {finalUrl: URL}
+    });
+    assert.equal(auditResult.rawValue, false);
+    assert.equal(auditResult.extendedInfo.value.length, 2);
   });
 });

@@ -23,6 +23,15 @@ const URL = 'https://example.com';
 /* eslint-env mocha */
 
 describe('Page does not use console.time()', () => {
+  it('fails when gatherer returns error', () => {
+    const debugString = 'interesting debug string';
+    const auditResult = NoConsoleTimeAudit.audit({
+      ConsoleTimeUsage: {value: -1, debugString}
+    });
+    assert.equal(auditResult.rawValue, -1);
+    assert.equal(auditResult.debugString, debugString);
+  });
+
   it('fails when no input present', () => {
     const auditResult = NoConsoleTimeAudit.audit({});
     assert.equal(auditResult.rawValue, -1);
@@ -32,7 +41,7 @@ describe('Page does not use console.time()', () => {
   it('passes when console.time() is not used', () => {
     const auditResult = NoConsoleTimeAudit.audit({
       ConsoleTimeUsage: {usage: []},
-      URL: {finalUrl: URL},
+      URL: {finalUrl: URL}
     });
     assert.equal(auditResult.rawValue, true);
     assert.equal(auditResult.extendedInfo.value.length, 0);
@@ -46,7 +55,7 @@ describe('Page does not use console.time()', () => {
           {url: 'http://example2.com/two', line: 2, col: 22}
         ]
       },
-      URL: {finalUrl: URL},
+      URL: {finalUrl: URL}
     });
     assert.equal(auditResult.rawValue, true);
     assert.equal(auditResult.extendedInfo.value.length, 0);
@@ -61,7 +70,22 @@ describe('Page does not use console.time()', () => {
           {url: 'http://example2.com/two', line: 2, col: 22}
         ]
       },
-      URL: {finalUrl: URL},
+      URL: {finalUrl: URL}
+    });
+    assert.equal(auditResult.rawValue, false);
+    assert.equal(auditResult.extendedInfo.value.length, 2);
+  });
+
+  it('fails when console.time() is used in eval()', () => {
+    const auditResult = NoConsoleTimeAudit.audit({
+      ConsoleTimeUsage: {
+        usage: [
+          {url: 'http://example.com/one', line: 1, col: 1, isEval: false},
+          {url: 'module.exports (blah/handler.js:5:18)', line: 5, col: 18, isEval: true},
+          {url: 'module.exports (blah/handler.js:5:18)', line: 5, col: 18, isEval: false}
+        ]
+      },
+      URL: {finalUrl: URL}
     });
     assert.equal(auditResult.rawValue, false);
     assert.equal(auditResult.extendedInfo.value.length, 2);

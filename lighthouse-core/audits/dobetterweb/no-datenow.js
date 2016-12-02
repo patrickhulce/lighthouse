@@ -47,17 +47,24 @@ class NoDateNowAudit extends Audit {
    */
   static audit(artifacts) {
     if (typeof artifacts.DateNowUse === 'undefined' ||
-        artifacts.DateNowUse === -1) {
+        artifacts.DateNowUse.value === -1) {
+      let debugString = 'Unknown error with the DateNowUse gatherer';
+      if (typeof artifacts.DateNowUse === 'undefined') {
+        debugString = 'DateNowUse gatherer did not run';
+      } else if (artifacts.DateNowUse.debugString) {
+        debugString = artifacts.DateNowUse.debugString;
+      }
+
       return NoDateNowAudit.generateAuditResult({
         rawValue: -1,
-        debugString: 'DateNowUse gatherer did not run'
+        debugString
       });
     }
 
     const pageHost = url.parse(artifacts.URL.finalUrl).host;
-    // Filter usage from other hosts.
+    // Filter usage from other hosts and keep eval'd code.
     const results = artifacts.DateNowUse.usage.filter(err => {
-      return err.url ? url.parse(err.url).host === pageHost : false;
+      return err.isEval ? err.url : url.parse(err.url).host === pageHost;
     }).map(err => {
       return Object.assign({
         label: `line: ${err.line}, col: ${err.col}`,
