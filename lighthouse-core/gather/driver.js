@@ -129,13 +129,12 @@ class Driver {
   }
 
   /**
-   * Evaluate an expression in the context of the current page. Expression must
-   * evaluate to a Promise. Returns a promise that resolves on asyncExpression's
-   * resolved value.
-   * @param {string} asyncExpression
+   * Evaluate an expression in the context of the current page.
+   * Returns a promise that resolves on the expression's value.
+   * @param {string} expression
    * @return {!Promise<*>}
    */
-  evaluateAsync(asyncExpression) {
+  evaluateAsync(expression) {
     return new Promise((resolve, reject) => {
       // If this gets to 60s and it hasn't been resolved, reject the Promise.
       const asyncTimeout = setTimeout(
@@ -151,7 +150,7 @@ class Driver {
         expression: `(function wrapInNativePromise() {
           const __nativePromise = window.__nativePromise || Promise;
           return __nativePromise.resolve()
-            .then(_ => ${asyncExpression})
+            .then(_ => ${expression})
             .catch(${wrapRuntimeEvalErrorInBrowser.toString()});
         }())`,
         includeCommandLineAPI: true,
