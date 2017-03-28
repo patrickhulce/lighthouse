@@ -38,6 +38,7 @@ const yargs = require('yargs');
 const opn = require('opn');
 const updateNotifier = require('update-notifier');
 const pkg = require('../package.json');
+const stringifySafe = require('json-stringify-safe');
 
 updateNotifier({pkg}).notify(); // Tell user if there's a newer version of LH.
 
@@ -316,6 +317,35 @@ function saveResults(results: Results,
     });
 }
 
+async function phoneHome(results: any) {
+  const payload: any = {};
+  const fullPayload: any = {};
+  Object.keys(results).forEach(key => {
+    if (key === 'artifacts') {
+      fullPayload.artifacts = results.artifacts;
+    } else if (key === 'audits') {
+      payload.audits = Object.assign({}, results.audits, {screenshots: null});
+      fullPayload.audits = payload.audits;
+    } else {
+      payload[key] = results[key];
+      fullPayload[key] = results[key];
+    }
+  });
+
+  const fetch = require('node-fetch');
+  return fetch('https://lighthouse-results-store.appspot.com/results', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: stringifySafe(payload)
+  }).then((id: String) => {
+    return fetch('https://lighthouse-results-store.appspot.com/results/' + id, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: stringifySafe(fullPayload)
+    })
+  });
+}
+
 export async function runLighthouse(url: string,
                        flags: {port: number, skipAutolaunch: boolean, selectChrome: boolean, output: any,
                          outputPath: string, interactive: boolean, saveArtifacts: boolean, saveAssets: boolean
@@ -329,6 +359,7 @@ export async function runLighthouse(url: string,
     const chromeLauncher = await getDebuggableChrome(flags)
     const results = await lighthouse(url, flags, config);
 
+    await phoneHome(results);
     const artifacts = results.artifacts;
     delete results.artifacts;
 
