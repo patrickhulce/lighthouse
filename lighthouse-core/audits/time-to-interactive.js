@@ -38,43 +38,96 @@ class TTIMetric extends Audit {
   }
 
   /**
+   * Finds a quiet window in main thread activity of windowSize within the bounds of minTime and
+   * maxTime where the given percentile of estimated input latency is <50ms.
    *
-   * @param {number} minTime
-   * @param {number} maxTime
-   * @param {{model: !Object, trace: !Object}} data
-   * @param {number=} windowSize
+   * @param {number} minTime Window start must be greater than or equal to this value
+   * @param {number} maxTime Window end must be less than or equal to this value
+   * @param {!Object} model The trace model from requestTracingModel
+   * @param {!Object} trace The trace artifact
+   * @param {!Object} options
    * @return {{timeInMs: number|undefined, currentLatency: number, foundLatencies: !Array}}
    */
-  static _forwardWindowTTI(minTime, maxTime, data, windowSize = 500) {
-    // Find first window where Est Input Latency is <50ms at the 90% percentile.
-    let startTime = minTime - 50;
+  static _slidingResponsivenessWindow(
+    minTime,
+    maxTime,
+    model,
+    trace,
+    options = {}
+  ) {
+    const threshold = options.threshold || 50;
+    const windowSize = options.responsivenessWindowSize || 500;
+    const percentile = options.responsivenessPercentile || .9;
+    const isForwardSearch = typeof options.isForwardSearch === 'boolean' ?
+        options.isForwardSearch : true;
+
+    let startTime = isForwardSearch ? minTime - 50 : maxTime - windowSize + 50;
     let endTime;
+    let done = false;
+    let seenGoodEnoughLatency = false;
     let currentLatency = Infinity;
-    const percentiles = [0.9]; // [0.75, 0.9, 0.99, 1];
-    const threshold = 50;
+    const percentiles = [percentile]; // [0.75, 0.9, 0.99, 1];
     const foundLatencies = [];
 
-    // When we've found a latency that's good enough, we're good.
-    while (currentLatency > threshold) {
-      // While latency is too high, increment just 50ms and look again.
-      startTime += 50;
+    while (!done) {
+      // While latency is too high, move just 50ms and look again.
+      startTime = startTime + (isForwardSearch ? 50 : -50);
       endTime = startTime + windowSize;
+
       // If there's no more room in the trace to look, we're done.
-      if (endTime > maxTime) {
-        return {currentLatency, foundLatencies};
+      if (startTime < minTime || endTime > maxTime) {
+        let timeInMs = undefined;
+
+        // For reverse search, running out of room means the entire window was responsive.
+        if (!isForwardSearch && seenGoodEnoughLatency) {
+          timeInMs = minTime;
+        }
+
+        return {
+          timeInMs,
+          currentLatency,
+          foundLatencies,
+        };
       }
 
-      // Get our expected latency for the time window
-      const latencies = TracingProcessor.getRiskToResponsiveness(
-        data.model, data.trace, startTime, endTime, percentiles);
-      const estLatency = latencies[0].time;
+      let estLatency;
+      if (percentile === 'long-tasks') {
+        estLatency = TracingProcessor.hasLongTask(model, trace, startTime, endTime) ? Infinity : 0;
+      } else if (percentile === 'patrick') {
+        const earlyDurations = TracingProcessor.getMainThreadTopLevelEventDurations(model, trace, startTime, startTime + 500).durations;
+        const durations = TracingProcessor.getMainThreadTopLevelEventDurations(model, trace, startTime, endTime).durations;
+
+        const hasNoneEarly = earlyDurations.filter(x => x > 50).length === 0;
+        const has5OrFewer = durations.filter(x => x > 50).length <= 5;
+        const hasNoTaskLongerThan100 = durations.filter(x => x > 100).length === 0;
+        estLatency = hasNoneEarly && has5OrFewer && hasNoTaskLongerThan100 ? 0 : Infinity;
+      } else {
+        const latencies = TracingProcessor.getRiskToResponsiveness(
+          model, trace, startTime, endTime, percentiles);
+        estLatency = latencies[0].time;
+      }
+
       foundLatencies.push({
         estLatency: estLatency,
         startTime: startTime.toFixed(1)
       });
 
-      // Grab this latency and try the threshold again
+      // Grab this latency and check if we're done yet
       currentLatency = estLatency;
+      seenGoodEnoughLatency = seenGoodEnoughLatency || currentLatency <= threshold;
+
+      if (isForwardSearch) {
+        // for forward search we slide forward until we move into the threshold
+        done = seenGoodEnoughLatency;
+      } else {
+        // for reverse search, we slide back until we move out of the threshold
+        done = seenGoodEnoughLatency && currentLatency > threshold;
+      }
+    }
+
+    // move the start time back into the threshold region if we're reverse search
+    if (!isForwardSearch) {
+      startTime = startTime + 50;
     }
 
     return {
@@ -86,45 +139,301 @@ class TTIMetric extends Audit {
   }
 
   /**
-   * @param {{fmpTiming: number, visuallyReadyTiming: number, traceEndTiming: number}} times
+   * Finds all time periods where there were allowedConcurrentRequests or fewer inflight requests.
+   *
+   * @param {!Array<{parsedUrl: Object, startTime: number, endTime: number>} networkRecords
+   * @param {number=} allowedConcurrentRequests Maximum number of concurrent requests allowed in a
+   *    quiet period.
+   * @return {!Array<{start: number, end: number>}
+   */
+  static _findNetworkNQuiet(networkRecords, allowedConcurrentRequests = 2) {
+    const timeBoundaries = networkRecords.reduce((boundaries, record) => {
+      const scheme = record.parsedURL && record.parsedURL.scheme;
+      if (scheme === 'data' || scheme === 'ws') {
+        return boundaries;
+      }
+
+      boundaries.push({time: record.startTime, isStart: true});
+      boundaries.push({time: record.endTime, isStart: false});
+      return boundaries;
+    }, []).sort((a, b) => a.time - b.time);
+
+    let inflight = 0;
+    let quietPeriodStart = 0;
+    const quietPeriods = [];
+    timeBoundaries.forEach(boundary => {
+      if (boundary.isStart) {
+        // we are exiting a quiet period
+        if (inflight === allowedConcurrentRequests) {
+          quietPeriods.push({start: quietPeriodStart, end: boundary.time});
+          quietPeriodStart = null;
+        }
+        inflight++;
+      } else {
+        inflight--;
+        // we are entering a quiet period
+        if (inflight === allowedConcurrentRequests) {
+          quietPeriodStart = boundary.time;
+        }
+      }
+    });
+
+    // Check if the trace ended in a quiet period
+    if (typeof quietPeriodStart === 'number') {
+      quietPeriods.push({start: quietPeriodStart, end: Infinity});
+    }
+
+    return quietPeriods;
+  }
+
+  static _findNetworkNQuietStart(networkRecords, timestamps, n, windowSize) {
+    const networkQuietPeriods = TTIMetric._findNetworkNQuiet(networkRecords, n);
+    const quietPeriodsAfterFMP = networkQuietPeriods.filter(period => {
+      return period.start > timestamps.firstMeaningfulPaint / 1000 &&
+        (period.end - period.start) * 1000 > windowSize;
+    });
+
+    if (!quietPeriodsAfterFMP.length) {
+      return {networkQuietPeriods};
+    }
+
+    const start = quietPeriodsAfterFMP[0] && quietPeriodsAfterFMP[0].start * 1000;
+    const timing = (start - timestamps.navigationStart) || 0;
+    return {networkQuietPeriods, start, timing};
+  }
+
+  /**
+   * Searches forward until finding a network quiet window, then searches forward for a
+   * responsiveness window and returns the start of that window.
+   *
+   * @param {!Object} times
+   * @param {!Object} timestamps
+   * @param {!Object} data
+   * @param {{allowedConcurrentRequests: number, responsivenessWindowSize: number, percentile: number,
+   *    networkWindowSize: number}} options
+   * @return {{timeInMs: number|undefined, currentLatency: number, foundLatencies: !Array,
+   *    networkQuietPeriods: !Array}}
+   */
+  static _networkForwardSearch(times, timestamps, data, options) {
+    const networkQuietPeriods = TTIMetric._findNetworkNQuiet(data.networkRecords,
+        options.allowedConcurrentRequests);
+    const quietPeriodsAfterFMP = networkQuietPeriods.filter(period => {
+      return period.start > timestamps.firstMeaningfulPaint / 1000 &&
+        (period.end - period.start) * 1000 > options.networkWindowSize;
+    });
+
+    if (!quietPeriodsAfterFMP.length) {
+      return {networkQuietPeriods};
+    }
+
+    const networkQuietStart = quietPeriodsAfterFMP[0] && quietPeriodsAfterFMP[0].start * 1000;
+    const networkQuietTiming = (networkQuietStart - timestamps.navigationStart) || 0;
+    const forwardSearchResult = TTIMetric._slidingResponsivenessWindow(
+      Math.max(networkQuietTiming, times.firstMeaningfulPaint),
+      times.traceEnd,
+      data.model,
+      data.trace,
+      options
+    );
+
+    return Object.assign({networkQuietPeriods}, forwardSearchResult);
+  }
+
+  /**
+   * Searches forward until finding a network quiet window, then searches forward for a
+   * responsiveness window, then searches backward for when the responsiveness window ends.
+   *
+   * @param {!Object} times
+   * @param {!Object} timestamps
+   * @param {!Object} data
+   * @param {{allowedConcurrentRequests: number, responsivenessWindowSize: number, percentile: number,
+   *    networkWindowSize: number}} options
+   * @return {{timeInMs: number|undefined, currentLatency: number, foundLatencies: !Array,
+   *    networkQuietPeriods: !Array}}
+   */
+  static _networkReverseSearch(times, timestamps, data, options) {
+    const forwardSearchResult = TTIMetric._networkForwardSearch(times, timestamps, data, options);
+    if (!forwardSearchResult.timeInMs) {
+      return forwardSearchResult;
+    }
+
+    return TTIMetric._slidingResponsivenessWindow(
+      times.firstMeaningfulPaint,
+      forwardSearchResult.timeInMs + 5000,
+      data.model,
+      data.trace,
+      Object.assign({}, options, {isForwardSearch: false})
+    );
+  }
+
+  /**
+   * @param {{firstMeaningfulPaint: number, visuallyReady: number, traceEnd: number}} times
    * @param {{model: !Object, trace: !Object}} data
    * @return {{timeInMs: number|undefined, currentLatency: number, foundLatencies: !Array}}
    */
   static findTTIAlpha(times, data) {
-    return TTIMetric._forwardWindowTTI(
+    return TTIMetric._slidingResponsivenessWindow(
       // when screenshots are not available, visuallyReady is 0 and this falls back to fMP
-      Math.max(times.fmpTiming, times.visuallyReadyTiming),
-      times.traceEndTiming,
-      data,
-      500
+      Math.max(times.firstMeaningfulPaint, times.visuallyReady),
+      times.traceEnd,
+      data.model,
+      data.trace
     );
   }
 
   /**
-   * @param {{fmpTiming: number, visuallyReadyTiming: number, traceEndTiming: number}} times
+   * @param {{firstMeaningfulPaint: number, visuallyReady: number, traceEnd: number}} times
    * @param {{model: !Object, trace: !Object}} data
    * @return {{timeInMs: number|undefined, currentLatency: number, foundLatencies: !Array}}
    */
   static findTTIAlphaFMPOnly(times, data) {
-    return TTIMetric._forwardWindowTTI(
-      times.fmpTiming,
-      times.traceEndTiming,
-      data,
-      500
+    return TTIMetric._slidingResponsivenessWindow(
+      times.firstMeaningfulPaint,
+      times.traceEnd,
+      data.model,
+      data.trace
     );
   }
 
   /**
-   * @param {{fmpTiming: number, visuallyReadyTiming: number, traceEndTiming: number}} times
+   * @param {{firstMeaningfulPaint: number, visuallyReady: number, traceEnd: number}} times
+   * @param {{model: !Object, trace: !Object}} data
+   * @return {{timeInMs: number|undefined, currentLatency: number, foundLatencies: !Array}}
+   */
+  static findTTIAlphaFMPOnly2s(times, data) {
+    return TTIMetric._slidingResponsivenessWindow(
+      times.firstMeaningfulPaint,
+      times.traceEnd,
+      data.model,
+      data.trace,
+      {responsivenessWindowSize: 2000}
+    );
+  }
+
+  /**
+   * @param {{firstMeaningfulPaint: number, visuallyReady: number, traceEnd: number}} times
    * @param {{model: !Object, trace: !Object}} data
    * @return {{timeInMs: number|undefined, currentLatency: number, foundLatencies: !Array}}
    */
   static findTTIAlphaFMPOnly5s(times, data) {
-    return TTIMetric._forwardWindowTTI(
-      times.fmpTiming,
-      times.traceEndTiming,
+    return TTIMetric._slidingResponsivenessWindow(
+      times.firstMeaningfulPaint,
+      times.traceEnd,
+      data.model,
+      data.trace,
+      {responsivenessWindowSize: 5000}
+    );
+  }
+
+  /**
+   * @param {{firstMeaningfulPaint: number, visuallyReady: number, traceEnd: number}} times
+   * @param {{model: !Object, trace: !Object}} data
+   * @return {{timeInMs: number|undefined, currentLatency: number, foundLatencies: !Array}}
+   */
+  static findTTIAlphaFMPOnly2sLongTask(times, data) {
+    return TTIMetric._slidingResponsivenessWindow(
+      times.firstMeaningfulPaint,
+      times.traceEnd,
+      data.model,
+      data.trace,
+      {responsivenessWindowSize: 2000, responsivenessPercentile: 'long-tasks'}
+    );
+  }
+
+  /**
+   * @param {{firstMeaningfulPaint: number, visuallyReady: number, traceEnd: number}} times
+   * @param {{model: !Object, trace: !Object}} data
+   * @return {{timeInMs: number|undefined, currentLatency: number, foundLatencies: !Array}}
+   */
+  static findTTIAlphaFMPOnly5sLongTask(times, data) {
+    return TTIMetric._slidingResponsivenessWindow(
+      times.firstMeaningfulPaint,
+      times.traceEnd,
+      data.model,
+      data.trace,
+      {responsivenessWindowSize: 5000, responsivenessPercentile: 'long-tasks'}
+    );
+  }
+
+  /**
+   * @param {{firstMeaningfulPaint: number, visuallyReady: number, traceEnd: number}} times
+   * @param {{model: !Object, trace: !Object}} data
+   * @return {{timeInMs: number|undefined, currentLatency: number, foundLatencies: !Array}}
+   */
+  static findTTIAlphaPatrick(times, data) {
+    return TTIMetric._slidingResponsivenessWindow(
+      times.firstMeaningfulPaint,
+      times.traceEnd,
+      data.model,
+      data.trace,
+      {responsivenessWindowSize: 5000, responsivenessPercentile: 'patrick'}
+    );
+  }
+
+  /**
+   * @param {{firstMeaningfulPaint: number, visuallyReady: number, traceEnd: number}} times
+   * * @param {{firstMeaningfulPaint: number, visuallyReady: number, traceEnd: number}} timestamps
+   * @param {{model: !Object, trace: !Object, networkRecords: !Array}} data
+   * @return {{timeInMs: number|undefined, currentLatency: number, foundLatencies: !Array,
+   *    networkQuietPeriods: !Array}}
+   */
+  static findTTIAlphaNetworkReverseSearch(times, timestamps, data) {
+    return TTIMetric._networkReverseSearch(
+      times,
+      timestamps,
       data,
-      5000
+      {
+        allowedConcurrentRequests: 2,
+        networkWindowSize: 0,
+        responsivenessWindowSize: 5000,
+        responsivenessPercentile: 'long-tasks',
+      }
+    );
+  }
+
+  /**
+   * @param {{firstMeaningfulPaint: number, visuallyReady: number, traceEnd: number}} times
+   * * @param {{firstMeaningfulPaint: number, visuallyReady: number, traceEnd: number}} timestamps
+   * @param {{model: !Object, trace: !Object, networkRecords: !Array}} data
+   * @return {{timeInMs: number|undefined, currentLatency: number, foundLatencies: !Array,
+   *    networkQuietPeriods: !Array}}
+   */
+  static findTTIAlphaNetworkReverseSearchEIL(times, timestamps, data) {
+    return TTIMetric._networkReverseSearch(
+      times,
+      timestamps,
+      data,
+      {
+        allowedConcurrentRequests: 2,
+        networkWindowSize: 0,
+        responsivenessWindowSize: 5000,
+        responsivenessPercentile: .9,
+      }
+    );
+  }
+
+  /**
+   * @param {{firstMeaningfulPaint: number, visuallyReady: number, traceEnd: number}} times
+   * * @param {{firstMeaningfulPaint: number, visuallyReady: number, traceEnd: number}} timestamps
+   * @param {{model: !Object, trace: !Object, networkRecords: !Array}} data
+   * @return {{timeInMs: number|undefined, currentLatency: number, foundLatencies: !Array,
+   *    networkQuietPeriods: !Array}}
+   */
+  static findTTIAlphaCriticalNetworkForwardSearch(times, timestamps, data) {
+    const scriptsOnly = data.networkRecords.filter(record => {
+      return ['VeryHigh', 'High', 'Medium'].includes(record.priority()) &&
+        record._resourceType !== 'xhr' && !/(image|audio|video)/.test(record._mimeType);
+    });
+    return TTIMetric._networkForwardSearch(
+      times,
+      timestamps,
+      Object.assign({}, data, {networkRecords: scriptsOnly}),
+      {
+        allowedConcurrentRequests: 0,
+        networkWindowSize: 500,
+        responsivenessWindowSize: 2000,
+        percentile: .95,
+      }
     );
   }
 
@@ -154,6 +463,7 @@ class TTIMetric extends Audit {
    */
   static audit(artifacts) {
     const trace = artifacts.traces[Audit.DEFAULT_PASS];
+    const networkRecords = artifacts.networkRecords[Audit.DEFAULT_PASS];
 
     let debugString;
     // We start looking at Math.Max(FMP, visProgress[0.85])
@@ -180,21 +490,31 @@ class TTIMetric extends Audit {
       const traceEndTiming = tabTrace.timings.traceEnd;
 
       // look at speedline results for 85% starting at FMP
-      let visuallyReadyTiming = 0;
+      let visuallyReady = 0;
       if (speedline && speedline.frames) {
         const eightyFivePctVC = speedline.frames.find(frame => {
           return frame.getTimeStamp() >= fMPtsInMS && frame.getProgress() >= 85;
         });
         if (eightyFivePctVC) {
-          visuallyReadyTiming = eightyFivePctVC.getTimeStamp() - navStartTsInMS;
+          visuallyReady = eightyFivePctVC.getTimeStamp() - navStartTsInMS;
         }
       }
 
-      const times = {fmpTiming, visuallyReadyTiming, traceEndTiming};
-      const data = {tabTrace, model, trace};
-      const timeToInteractive = TTIMetric.findTTIAlpha(times, data);
-      const timeToInteractiveB = TTIMetric.findTTIAlphaFMPOnly(times, data);
-      const timeToInteractiveC = TTIMetric.findTTIAlphaFMPOnly5s(times, data);
+      const timings = Object.assign({visuallyReady}, tabTrace.timings);
+      const timestamps = Object.assign({}, tabTrace.timestamps);
+      const data = {tabTrace, model, trace, networkRecords};
+      const timeToInteractive = TTIMetric.findTTIAlpha(timings, data);
+      const timeToInteractiveB = TTIMetric.findTTIAlphaFMPOnly(timings, data);
+      const timeToInteractiveC = TTIMetric.findTTIAlphaFMPOnly5s(timings, data);
+      const timeToInteractiveD = TTIMetric.findTTIAlphaFMPOnly2s(timings, data);
+      const timeToInteractiveE = TTIMetric.findTTIAlphaNetworkReverseSearch(timings, timestamps,
+          data);
+      const timeToInteractiveF = TTIMetric.findTTIAlphaNetworkReverseSearchEIL(timings, timestamps,
+          data);
+      const timeToInteractiveG = TTIMetric.findTTIAlphaCriticalNetworkForwardSearch(timings, timestamps, data);
+      const timeToInteractiveH = TTIMetric.findTTIAlphaFMPOnly5sLongTask(timings, data);
+      const timeToInteractiveI = TTIMetric.findTTIAlphaFMPOnly2sLongTask(timings, data);
+      const timeToInteractiveJ = TTIMetric.findTTIAlphaPatrick(timings, data);
 
       if (!timeToInteractive.timeInMs) {
         throw new Error('Entire trace was found to be busy.');
@@ -216,26 +536,52 @@ class TTIMetric extends Audit {
       const extendedInfo = {
         timings: {
           onLoad: onLoadTiming,
-          fMP: parseFloat(fmpTiming.toFixed(3)),
-          visuallyReady: parseFloat(visuallyReadyTiming.toFixed(3)),
+          fMP: parseFloat(timings.firstMeaningfulPaint.toFixed(3)),
+          visuallyReady: parseFloat(visuallyReady.toFixed(3)),
           timeToInteractive: parseFloat(timeToInteractive.timeInMs.toFixed(3)),
           timeToInteractiveB: timeToInteractiveB.timeInMs,
           timeToInteractiveC: timeToInteractiveC.timeInMs,
-          endOfTrace: traceEndTiming,
+          timeToInteractiveD: timeToInteractiveD.timeInMs,
+          timeToInteractiveE: timeToInteractiveE.timeInMs,
+          timeToInteractiveF: timeToInteractiveF.timeInMs,
+          timeToInteractiveG: timeToInteractiveG.timeInMs,
+          timeToInteractiveH: timeToInteractiveH.timeInMs,
+          endOfTrace: timings.traceEnd,
         },
         timestamps: {
           onLoad: (onLoadTiming + navStartTsInMS) * 1000,
           fMP: fMPtsInMS * 1000,
-          visuallyReady: (visuallyReadyTiming + navStartTsInMS) * 1000,
+          visuallyReady: (visuallyReady + navStartTsInMS) * 1000,
           timeToInteractive: (timeToInteractive.timeInMs + navStartTsInMS) * 1000,
           timeToInteractiveB: (timeToInteractiveB.timeInMs + navStartTsInMS) * 1000,
           timeToInteractiveC: (timeToInteractiveC.timeInMs + navStartTsInMS) * 1000,
-          endOfTrace: (traceEndTiming + navStartTsInMS) * 1000,
+          timeToInteractiveD: (timeToInteractiveD.timeInMs + navStartTsInMS) * 1000,
+          timeToInteractiveE: (timeToInteractiveE.timeInMs + navStartTsInMS) * 1000,
+          timeToInteractiveF: (timeToInteractiveF.timeInMs + navStartTsInMS) * 1000,
+          timeToInteractiveG: (timeToInteractiveG.timeInMs + navStartTsInMS) * 1000,
+          timeToInteractiveH: (timeToInteractiveH.timeInMs + navStartTsInMS) * 1000,
+          timeToInteractiveI: (timeToInteractiveI.timeInMs + navStartTsInMS) * 1000,
+          timeToInteractiveJ: (timeToInteractiveJ.timeInMs + navStartTsInMS) * 1000,
+          network0Quiet: TTIMetric._findNetworkNQuietStart(networkRecords, timestamps, 0, 0).start * 1000,
+          network2Quiet: TTIMetric._findNetworkNQuietStart(networkRecords, timestamps, 2, 0).start * 1000,
+          networkIdle500ms: TTIMetric._findNetworkNQuietStart(networkRecords, timestamps, 0, 500).start * 1000,
+          network2Idle500ms: TTIMetric._findNetworkNQuietStart(networkRecords, timestamps, 2, 500).start * 1000,
+          networkIdle1s: TTIMetric._findNetworkNQuietStart(networkRecords, timestamps, 0, 1000).start * 1000,
+          networkIdle5s: TTIMetric._findNetworkNQuietStart(networkRecords, timestamps, 0, 3000).start * 1000,
+          load: timestamps.load * 1000,
+          domContentLoaded: timestamps.domContentLoaded * 1000,
+          endOfTrace: timestamps.traceEnd * 1000,
         },
         latencies: {
           timeToInteractive: timeToInteractive.foundLatencies,
           timeToInteractiveB: timeToInteractiveB.foundLatencies,
           timeToInteractiveC: timeToInteractiveC.foundLatencies,
+          timeToInteractiveD: timeToInteractiveD.foundLatencies,
+          timeToInteractiveE: timeToInteractiveE.foundLatencies,
+        },
+        networkQuietPeriods: {
+          timeToInteractiveD: timeToInteractiveD.networkQuietPeriods,
+          timeToInteractiveE: timeToInteractiveE.networkQuietPeriods,
         },
         expectedLatencyAtTTI: parseFloat(timeToInteractive.currentLatency.toFixed(3))
       };

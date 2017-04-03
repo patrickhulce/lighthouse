@@ -24,7 +24,7 @@
     "smoke": "bash lighthouse-cli/test/smokehouse/offline-local/run-tests.sh && bash lighthouse-cli/test/smokehouse/perf/run-tests.sh && bash lighthouse-cli/test/smokehouse/dobetterweb/run-tests.sh && bash lighthouse-cli/test/smokehouse/byte-efficiency/run-tests.sh",
     "coverage": "node $(npm bin)/istanbul cover -x \"**/third_party/**\" _mocha -- $(find */test -name '*-test.js') --timeout 10000 --reporter progress",
     "coveralls": "npm run coverage && cat ./coverage/lcov.info | coveralls",
-    "start": "gulp && node ./lighthouse-cli/index.js",
+    "start": "gulp && node --max_old_space_size=4096 ./lighthouse-cli/index.js",
     "test": "npm run lint --silent && gulp && npm run unit",
     "core-unit": "bash lighthouse-core/scripts/run-mocha.sh --core",
     "cli-unit": "bash lighthouse-core/scripts/run-mocha.sh --cli",

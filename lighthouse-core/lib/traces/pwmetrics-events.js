@@ -155,6 +155,14 @@ class Metrics {
         }
       },
       {
+        name: 'Time to Interactive (vAlpha non-visual, 2s)',
+        id: 'tti-non-visual-2s',
+        getTs: auditResults => {
+          const ttiExt = auditResults['time-to-interactive'].extendedInfo;
+          return ttiExt.value.timestamps.timeToInteractiveD;
+        },
+      },
+      {
         name: 'Time to Interactive (vAlpha non-visual, 5s)',
         id: 'tti-non-visual-5s',
         getTs: auditResults => {
@@ -189,7 +197,111 @@ class Metrics {
           const ttiExt = auditResults['time-to-interactive'].extendedInfo;
           return safeGet(ttiExt, 'value.timings.onLoad');
         }
-      }
+      },
+      {
+        name: 'Time to Interactive (vAlpha non-visual, 5s long task)',
+        id: 'tti-non-visual-5s-long-task',
+        getTs: auditResults => {
+          const ttiExt = auditResults['time-to-interactive'].extendedInfo;
+          return ttiExt.value.timestamps.timeToInteractiveH;
+        },
+      },
+      {
+        name: 'Time to Interactive (vAlpha non-visual, 2s long task)',
+        id: 'tti-non-visual-2s-long-task',
+        getTs: auditResults => {
+          const ttiExt = auditResults['time-to-interactive'].extendedInfo;
+          return ttiExt.value.timestamps.timeToInteractiveI;
+        },
+      },
+      {
+        name: 'Time to Interactive (vAlpha Patrick)',
+        id: 'tti-patrick',
+        getTs: auditResults => {
+          const ttiExt = auditResults['time-to-interactive'].extendedInfo;
+          return ttiExt.value.timestamps.timeToInteractiveJ;
+        },
+      },
+      {
+        name: 'Time to Interactive (vAlpha reverse network)',
+        id: 'tti-reverse-network',
+        getTs: auditResults => {
+          const ttiExt = auditResults['time-to-interactive'].extendedInfo;
+          return ttiExt.value.timestamps.timeToInteractiveE;
+        },
+      },
+      {
+        name: 'Time to Interactive (vAlpha reverse network EIL)',
+        id: 'tti-reverse-network-eil',
+        getTs: auditResults => {
+          const ttiExt = auditResults['time-to-interactive'].extendedInfo;
+          return ttiExt.value.timestamps.timeToInteractiveF;
+        },
+      },
+      {
+        name: 'Time to Interactive (vAlpha critical network)',
+        id: 'tti-network-critical',
+        getTs: auditResults => {
+          const ttiExt = auditResults['time-to-interactive'].extendedInfo;
+          return ttiExt.value.timestamps.timeToInteractiveG;
+        },
+      },
+      {
+        name: 'DOM Content Loaded',
+        id: 'domContentLoaded',
+        getTs: auditResults => {
+          const ttiExt = auditResults['time-to-interactive'].extendedInfo;
+          return ttiExt.value.timestamps.domContentLoaded;
+        },
+      },
+      {
+        name: 'Network 0-Quiet',
+        id: 'network-0-quiet',
+        getTs: auditResults => {
+          const ttiExt = auditResults['time-to-interactive'].extendedInfo;
+          return ttiExt.value.timestamps.network0Quiet;
+        },
+      },
+      {
+        name: 'Network 2-Quiet',
+        id: 'network-2-quiet',
+        getTs: auditResults => {
+          const ttiExt = auditResults['time-to-interactive'].extendedInfo;
+          return ttiExt.value.timestamps.network2Quiet;
+        },
+      },
+      {
+        name: 'Network Idle 500ms',
+        id: 'network-idle-500ms',
+        getTs: auditResults => {
+          const ttiExt = auditResults['time-to-interactive'].extendedInfo;
+          return ttiExt.value.timestamps.networkIdle500ms;
+        },
+      },
+      {
+        name: 'Network-2 Idle 500ms',
+        id: 'network-2idle-500ms',
+        getTs: auditResults => {
+          const ttiExt = auditResults['time-to-interactive'].extendedInfo;
+          return ttiExt.value.timestamps.network2Idle500ms;
+        },
+      },
+      {
+        name: 'Network Idle 1s',
+        id: 'network-idle-1s',
+        getTs: auditResults => {
+          const ttiExt = auditResults['time-to-interactive'].extendedInfo;
+          return ttiExt.value.timestamps.networkIdle1s;
+        },
+      },
+      {
+        name: 'Network Idle 5s',
+        id: 'network-idle-5s',
+        getTs: auditResults => {
+          const ttiExt = auditResults['time-to-interactive'].extendedInfo;
+          return ttiExt.value.timestamps.networkIdle5s;
+        },
+      },
     ];
   }
 

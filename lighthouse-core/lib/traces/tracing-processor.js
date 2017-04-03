@@ -196,6 +196,12 @@ class TraceProcessor {
         ret.clippedLength);
   }
 
+  static hasLongTask(model, trace, startTime, endTime) {
+    const durations = TraceProcessor.getMainThreadTopLevelEventDurations(model, trace, startTime,
+        endTime).durations;
+    return durations.filter(x => x >= 50).length > 0;
+  }
+
   /**
    * Provides durations of all main thread top-level events
    * @param {!traceviewer.Model} model

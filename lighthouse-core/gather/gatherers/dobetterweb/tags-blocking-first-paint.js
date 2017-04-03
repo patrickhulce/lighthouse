@@ -36,6 +36,7 @@ const Gatherer = require('../gatherer');
 
 /* istanbul ignore next */
 function saveAsyncLinks() {
+  const initTime = performance.now();
   function checkForLinks() {
     document.querySelectorAll('link').forEach(link => {
       if (link.rel === 'preload' || link.disabled) {
@@ -43,7 +44,10 @@ function saveAsyncLinks() {
       }
     });
 
-    setTimeout(checkForLinks, 50);
+    // if (performance.now() - initTime < 5000) {
+
+    // }
+    // setTimeout(checkForLinks, 50);
   }
 
   window.__asyncLinks = window.__asyncLinks || {};

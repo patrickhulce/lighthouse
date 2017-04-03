@@ -95,6 +95,14 @@ class TraceOfTab extends ComputedArtifact {
       .filter(e => e.pid === startedInPageEvt.pid)
       .sort((event0, event1) => event0.ts - event1.ts);
 
+    const load = frameEvents
+      .filter(e => e.name === 'loadEventStart')
+      .reduce((max, item) => max.ts > item.ts ? max : item, {ts: 0});
+
+    const domContentLoaded = frameEvents
+      .filter(e => e.name === 'domContentLoadedEventStart')
+      .reduce((max, item) => max.ts > item.ts ? max : item, {ts: 0});
+
     const traceEnd = trace.traceEvents.reduce((max, evt) => {
       return max.ts > evt.ts ? max : evt;
     });
@@ -104,6 +112,8 @@ class TraceOfTab extends ComputedArtifact {
       firstPaint,
       firstContentfulPaint,
       firstMeaningfulPaint,
+      load,
+      domContentLoaded,
       traceEnd,
       onLoad,
     };
