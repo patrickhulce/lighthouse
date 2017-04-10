@@ -689,17 +689,17 @@ class Driver {
     return this.sendCommand('Runtime.enable');
   }
 
-  beginEmulation(flags) {
+  beginEmulation(flags, benchmarkResults) {
     return Promise.resolve().then(_ => {
       if (!flags.disableDeviceEmulation) return emulation.enableNexus5X(this);
-    }).then(_ => this.setThrottling(flags, {useThrottling: true}));
+    }).then(_ => this.setThrottling(flags, {useThrottling: true}, benchmarkResults));
   }
 
-  setThrottling(flags, passConfig) {
+  setThrottling(flags, passConfig, benchmarkResults) {
     const throttleCpu = passConfig.useThrottling && !flags.disableCpuThrottling;
     const throttleNetwork = passConfig.useThrottling && !flags.disableNetworkThrottling;
     const cpuPromise = throttleCpu ?
-        emulation.enableCPUThrottling(this) :
+        emulation.enableCPUThrottling(this, benchmarkResults) :
         emulation.disableCPUThrottling(this);
     const networkPromise = throttleNetwork ?
         emulation.enableNetworkThrottling(this) :

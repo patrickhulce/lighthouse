@@ -70,6 +70,8 @@ const CPU_THROTTLE_METRICS = {
   rate: 4.5
 };
 
+const TARGET_CPU_OPS_PER_MS = 500 * 1000;
+
 function enableNexus5X(driver) {
   /**
    * Finalizes touch emulation by enabling `"ontouchstart" in window` feature detect
@@ -125,8 +127,18 @@ function goOffline(driver) {
   return driver.sendCommand('Network.emulateNetworkConditions', OFFLINE_METRICS);
 }
 
-function enableCPUThrottling(driver) {
-  return driver.sendCommand('Emulation.setCPUThrottlingRate', CPU_THROTTLE_METRICS);
+function enableCPUThrottling(driver, benchmarkResults = {}) {
+  let rate;
+  const currentOps = benchmarkResults.runs / benchmarkResults.durationInMs;
+  if (!currentOps) {
+    rate = CPU_THROTTLE_METRICS.rate;
+  } else if (currentOps < TARGET_CPU_OPS_PER_MS) {
+    rate = 1;
+  } else {
+    rate = Math.round((currentOps / TARGET_CPU_OPS_PER_MS) * 10) / 10;
+  }
+
+  return driver.sendCommand('Emulation.setCPUThrottlingRate', {rate});
 }
 
 function disableCPUThrottling(driver) {

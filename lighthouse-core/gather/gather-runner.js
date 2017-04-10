@@ -91,12 +91,41 @@ class GatherRunner {
       }));
   }
 
-  static setupDriver(driver, options) {
+  /**
+   * @param {!Driver} driver
+   * @return {!Promise<{runs: number, durationInMs: number}>}
+   */
+  static performCpuBenchmark(driver) {
+    return driver.evaluateAsync(`(function () {
+      function testFunc() {
+        var x = 1;
+        return x + 5;
+      }
+
+      var startTime = performance.now();
+      var runs = 100 * 1000 * 1000; // 100 million runs
+      for (var i = 0; i < runs; i++) {
+        testFunc();
+      }
+
+      var durationInMs = performance.now() - startTime;
+      return {runs, durationInMs};
+    })()`);
+  }
+
+  /**
+   * @param {!Driver} driver
+   * @param {{url: string, flags: !Object}} options
+   * @param {{runs: number, durationInMs: number}=} benchmarkResults
+   * @return {!Promise}
+   */
+  static setupDriver(driver, options, benchmarkResults) {
     log.log('status', 'Initializing…');
+    log.log('benchmark', benchmarkResults);
     const resetStorage = !options.flags.disableStorageReset;
     // Enable emulation based on flags
     return driver.assertNoSameOriginServiceWorkerClients(options.url)
-      .then(_ => driver.beginEmulation(options.flags))
+      .then(_ => driver.beginEmulation(options.flags, benchmarkResults))
       .then(_ => driver.enableRuntimeEvents())
       .then(_ => driver.cacheNatives())
       .then(_ => resetStorage && driver.cleanAndDisableBrowserCaches())
@@ -323,10 +352,12 @@ class GatherRunner {
     passes = this.instantiateGatherers(passes, options.config.configDir);
 
     const gathererResults = {};
-
+    let benchmarkResults;
     return driver.connect()
       .then(_ => GatherRunner.loadBlank(driver))
-      .then(_ => GatherRunner.setupDriver(driver, options))
+      .then(_ => GatherRunner.performCpuBenchmark(driver))
+      .then(benchmarkResults_ => benchmarkResults = benchmarkResults_)
+      .then(_ => GatherRunner.setupDriver(driver, options, benchmarkResults))
 
       // Run each pass
       .then(_ => {
@@ -335,7 +366,7 @@ class GatherRunner {
         return passes.reduce((chain, config, passIndex) => {
           const runOptions = Object.assign({}, options, {config});
           return chain
-            .then(_ => driver.setThrottling(options.flags, config))
+            .then(_ => driver.setThrottling(options.flags, config, benchmarkResults))
             .then(_ => GatherRunner.beforePass(runOptions, gathererResults))
             .then(_ => GatherRunner.pass(runOptions, gathererResults))
             .then(_ => GatherRunner.afterPass(runOptions, gathererResults))
@@ -363,7 +394,7 @@ class GatherRunner {
       .then(artifacts => {
         // Add tracing data and computed artifacts to artifacts object.
         const computedArtifacts = this.instantiateComputedArtifacts();
-        Object.assign(artifacts, computedArtifacts, tracingData);
+        Object.assign(artifacts, computedArtifacts, tracingData, {benchmarkResults});
         return artifacts;
       })
       // cleanup on error
