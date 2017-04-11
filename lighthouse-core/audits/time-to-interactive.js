@@ -172,20 +172,20 @@ class TTIMetric extends Audit {
         // we are exiting a quiet period
         if (inflight === allowedConcurrentRequests) {
           quietPeriods.push({start: quietPeriodStart, end: boundary.time});
-          quietPeriodStart = null;
+          quietPeriodStart = Infinity;
         }
         inflight++;
       } else {
         inflight--;
         // we are entering a quiet period
-        if (inflight === allowedConcurrentRequests) {
-          quietPeriodStart = boundary.time;
+        if (inflight <= allowedConcurrentRequests) {
+          quietPeriodStart = Math.min(boundary.time, quietPeriodStart);
         }
       }
     });
 
     // Check if the trace ended in a quiet period
-    if (typeof quietPeriodStart === 'number') {
+    if (quietPeriodStart !== Infinity) {
       quietPeriods.push({start: quietPeriodStart, end: Infinity});
     }
 
@@ -195,7 +195,7 @@ class TTIMetric extends Audit {
   static _findNetworkNQuietStart(networkRecords, timestamps, n, windowSize) {
     const networkQuietPeriods = TTIMetric._findNetworkNQuiet(networkRecords, n);
     const quietPeriodsAfterFMP = networkQuietPeriods.filter(period => {
-      return period.start > timestamps.firstMeaningfulPaint / 1000 &&
+      return period.end > timestamps.firstMeaningfulPaint / 1000 &&
         (period.end - period.start) * 1000 > windowSize;
     });
 
@@ -203,7 +203,7 @@ class TTIMetric extends Audit {
       return {networkQuietPeriods};
     }
 
-    const start = quietPeriodsAfterFMP[0] && quietPeriodsAfterFMP[0].start * 1000;
+    const start = (quietPeriodsAfterFMP[0] && quietPeriodsAfterFMP[0].start * 1000) || timestamps.navigationStart;
     const timing = (start - timestamps.navigationStart) || 0;
     return {networkQuietPeriods, start: start * 1000, timing};
   }
@@ -224,7 +224,7 @@ class TTIMetric extends Audit {
     const networkQuietPeriods = TTIMetric._findNetworkNQuiet(data.networkRecords,
         options.allowedConcurrentRequests);
     const quietPeriodsAfterFMP = networkQuietPeriods.filter(period => {
-      return period.start > timestamps.firstMeaningfulPaint / 1000 &&
+      return period.end > timestamps.firstMeaningfulPaint / 1000 &&
         (period.end - period.start) * 1000 > options.networkWindowSize;
     }).map(period => Object.assign(period, {
       startInMs: period.start * 1000 - timestamps.navigationStart,
