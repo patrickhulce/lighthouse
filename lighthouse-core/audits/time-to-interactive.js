@@ -60,6 +60,7 @@ class TTIMetric extends Audit {
     const percentile = options.responsivenessPercentile || .9;
     const isForwardSearch = typeof options.isForwardSearch === 'boolean' ?
         options.isForwardSearch : true;
+    const networkQuietPeriods = options.networkQuietPeriods;
 
     let startTime = isForwardSearch ? minTime - 50 : maxTime - windowSize + 50;
     let endTime;
@@ -113,8 +114,13 @@ class TTIMetric extends Audit {
       });
 
       // Grab this latency and check if we're done yet
+      let isGoodEnough = currentLatency <= threshold;
+      if (networkQuietPeriods) {
+        isGoodEnough = Boolean(isGoodEnough && networkQuietPeriods.find(p => startTime < p.endInMs && endTime > p.startInMs));
+      }
+
       currentLatency = estLatency;
-      seenGoodEnoughLatency = seenGoodEnoughLatency || currentLatency <= threshold;
+      seenGoodEnoughLatency = seenGoodEnoughLatency || isGoodEnough;
 
       if (isForwardSearch) {
         // for forward search we slide forward until we move into the threshold
@@ -199,7 +205,7 @@ class TTIMetric extends Audit {
 
     const start = quietPeriodsAfterFMP[0] && quietPeriodsAfterFMP[0].start * 1000;
     const timing = (start - timestamps.navigationStart) || 0;
-    return {networkQuietPeriods, start, timing};
+    return {networkQuietPeriods, start: start * 1000, timing};
   }
 
   /**
@@ -220,20 +226,22 @@ class TTIMetric extends Audit {
     const quietPeriodsAfterFMP = networkQuietPeriods.filter(period => {
       return period.start > timestamps.firstMeaningfulPaint / 1000 &&
         (period.end - period.start) * 1000 > options.networkWindowSize;
-    });
+    }).map(period => Object.assign(period, {
+      startInMs: period.start * 1000 - timestamps.navigationStart,
+      endInMs: period.end * 1000 - timestamps.navigationStart
+    }));
 
     if (!quietPeriodsAfterFMP.length) {
       return {networkQuietPeriods};
     }
 
-    const networkQuietStart = quietPeriodsAfterFMP[0] && quietPeriodsAfterFMP[0].start * 1000;
-    const networkQuietTiming = (networkQuietStart - timestamps.navigationStart) || 0;
+    const networkQuietStart = quietPeriodsAfterFMP[0] && quietPeriodsAfterFMP[0].startInMs;
     const forwardSearchResult = TTIMetric._slidingResponsivenessWindow(
-      Math.max(networkQuietTiming, times.firstMeaningfulPaint),
+      Math.max(networkQuietStart, times.firstMeaningfulPaint),
       times.traceEnd,
       data.model,
       data.trace,
-      options
+      Object.assign({networkQuietPeriods}, options)
     );
 
     return Object.assign({networkQuietPeriods}, forwardSearchResult);
@@ -533,6 +541,15 @@ class TTIMetric extends Audit {
       score = Math.max(0, score);
       score = Math.round(score);
 
+      const networkIdles = {
+          network0Quiet: TTIMetric._findNetworkNQuietStart(networkRecords, timestamps, 0, 0),
+          network2Quiet: TTIMetric._findNetworkNQuietStart(networkRecords, timestamps, 2, 0),
+          networkIdle500ms: TTIMetric._findNetworkNQuietStart(networkRecords, timestamps, 0, 500),
+          network2Idle500ms: TTIMetric._findNetworkNQuietStart(networkRecords, timestamps, 2, 500),
+          networkIdle1s: TTIMetric._findNetworkNQuietStart(networkRecords, timestamps, 0, 1000),
+          networkIdle5s: TTIMetric._findNetworkNQuietStart(networkRecords, timestamps, 0, 3000),
+      }
+
       const extendedInfo = {
         timings: {
           onLoad: onLoadTiming,
@@ -546,6 +563,14 @@ class TTIMetric extends Audit {
           timeToInteractiveF: timeToInteractiveF.timeInMs,
           timeToInteractiveG: timeToInteractiveG.timeInMs,
           timeToInteractiveH: timeToInteractiveH.timeInMs,
+          timeToInteractiveI: timeToInteractiveI.timeInMs,
+          timeToInteractiveJ: timeToInteractiveJ.timeInMs,
+          network0Quiet: networkIdles.network0Quiet.timing,
+          network2Quiet: networkIdles.network2Quiet.timing,
+          networkIdle500ms: networkIdles.networkIdle500ms.timing,
+          network2Idle500ms: networkIdles.network2Idle500ms.timing,
+          networkIdle1s: networkIdles.networkIdle1s.timing,
+          networkIdle5s: networkIdles.networkIdle5s.timing,
           endOfTrace: timings.traceEnd,
         },
         timestamps: {
@@ -562,12 +587,12 @@ class TTIMetric extends Audit {
           timeToInteractiveH: (timeToInteractiveH.timeInMs + navStartTsInMS) * 1000,
           timeToInteractiveI: (timeToInteractiveI.timeInMs + navStartTsInMS) * 1000,
           timeToInteractiveJ: (timeToInteractiveJ.timeInMs + navStartTsInMS) * 1000,
-          network0Quiet: TTIMetric._findNetworkNQuietStart(networkRecords, timestamps, 0, 0).start * 1000,
-          network2Quiet: TTIMetric._findNetworkNQuietStart(networkRecords, timestamps, 2, 0).start * 1000,
-          networkIdle500ms: TTIMetric._findNetworkNQuietStart(networkRecords, timestamps, 0, 500).start * 1000,
-          network2Idle500ms: TTIMetric._findNetworkNQuietStart(networkRecords, timestamps, 2, 500).start * 1000,
-          networkIdle1s: TTIMetric._findNetworkNQuietStart(networkRecords, timestamps, 0, 1000).start * 1000,
-          networkIdle5s: TTIMetric._findNetworkNQuietStart(networkRecords, timestamps, 0, 3000).start * 1000,
+          network0Quiet: networkIdles.network0Quiet.start,
+          network2Quiet: networkIdles.network2Quiet.start,
+          networkIdle500ms: networkIdles.networkIdle500ms.start,
+          network2Idle500ms: networkIdles.network2Idle500ms.start,
+          networkIdle1s: networkIdles.networkIdle1s.start,
+          networkIdle5s: networkIdles.networkIdle5s.start,
           load: timestamps.load * 1000,
           domContentLoaded: timestamps.domContentLoaded * 1000,
           endOfTrace: timestamps.traceEnd * 1000,

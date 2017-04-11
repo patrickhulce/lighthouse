@@ -13,9 +13,7 @@
     "first-meaningful-paint",
     "speed-index-metric",
     "estimated-input-latency",
-    "time-to-interactive",
-    "user-timings",
-    "critical-request-chains"
+    "time-to-interactive"
   ],
 
   "categories": {
@@ -26,9 +24,7 @@
         {"id": "first-meaningful-paint", "weight": 5},
         {"id": "speed-index-metric", "weight": 1},
         {"id": "estimated-input-latency", "weight": 1},
-        {"id": "time-to-interactive", "weight": 5},
-        {"id": "critical-request-chains", "weight": 0},
-        {"id": "user-timings", "weight": 0}
+        {"id": "time-to-interactive", "weight": 5}
       ]
     }
   },
