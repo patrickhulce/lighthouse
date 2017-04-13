@@ -370,11 +370,32 @@ class TTIMetric extends Audit {
    */
   static findTTIAlphaPatrick(times, data) {
     return TTIMetric._slidingResponsivenessWindow(
-      times.firstMeaningfulPaint,
+      Math.max(times.firstMeaningfulPaint, times.domContentLoaded),
       times.traceEnd,
       data.model,
       data.trace,
       {responsivenessWindowSize: 5000, responsivenessPercentile: 'patrick'}
+    );
+  }
+
+  /**
+   * @param {{firstMeaningfulPaint: number, visuallyReady: number, traceEnd: number}} times
+   * * @param {{firstMeaningfulPaint: number, visuallyReady: number, traceEnd: number}} timestamps
+   * @param {{model: !Object, trace: !Object, networkRecords: !Array}} data
+   * @return {{timeInMs: number|undefined, currentLatency: number, foundLatencies: !Array,
+   *    networkQuietPeriods: !Array}}
+   */
+  static findTTIAlphaNetworkReverseSearchPatrick(times, timestamps, data) {
+    return TTIMetric._networkReverseSearch(
+      times,
+      timestamps,
+      data,
+      {
+        allowedConcurrentRequests: 2,
+        networkWindowSize: 0,
+        responsivenessWindowSize: 5000,
+        responsivenessPercentile: 'patrick',
+      }
     );
   }
 
@@ -514,11 +535,9 @@ class TTIMetric extends Audit {
       const timeToInteractive = TTIMetric.findTTIAlpha(timings, data);
       const timeToInteractiveB = TTIMetric.findTTIAlphaFMPOnly(timings, data);
       const timeToInteractiveC = TTIMetric.findTTIAlphaFMPOnly5s(timings, data);
-      const timeToInteractiveD = TTIMetric.findTTIAlphaFMPOnly2s(timings, data);
-      const timeToInteractiveE = TTIMetric.findTTIAlphaNetworkReverseSearch(timings, timestamps,
-          data);
-      const timeToInteractiveF = TTIMetric.findTTIAlphaNetworkReverseSearchEIL(timings, timestamps,
-          data);
+      const timeToInteractiveD = TTIMetric.findTTIAlphaNetworkReverseSearchPatrick(timings, timestamps, data);
+      const timeToInteractiveE = TTIMetric.findTTIAlphaNetworkReverseSearch(timings, timestamps, data);
+      const timeToInteractiveF = TTIMetric.findTTIAlphaNetworkReverseSearchEIL(timings, timestamps, data);
       const timeToInteractiveG = TTIMetric.findTTIAlphaCriticalNetworkForwardSearch(timings, timestamps, data);
       const timeToInteractiveH = TTIMetric.findTTIAlphaFMPOnly5sLongTask(timings, data);
       const timeToInteractiveI = TTIMetric.findTTIAlphaFMPOnly2sLongTask(timings, data);
@@ -571,6 +590,8 @@ class TTIMetric extends Audit {
           network2Idle500ms: networkIdles.network2Idle500ms.timing,
           networkIdle1s: networkIdles.networkIdle1s.timing,
           networkIdle5s: networkIdles.networkIdle5s.timing,
+          domContentLoaded: timings.domContentLoaded,
+          load: timings.load,
           endOfTrace: timings.traceEnd,
         },
         timestamps: {

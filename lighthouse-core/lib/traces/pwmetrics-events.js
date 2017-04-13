@@ -155,7 +155,7 @@ class Metrics {
         }
       },
       {
-        name: 'Time to Interactive (vAlpha non-visual, 2s)',
+        name: 'Time to Interactive (vAlpha Patrick reverse network)',
         id: 'tti-non-visual-2s',
         getTs: auditResults => {
           const ttiExt = auditResults['time-to-interactive'].extendedInfo;
